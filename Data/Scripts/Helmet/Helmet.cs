@@ -8,6 +8,7 @@ using System.IO;
 using Sandbox.Common;
 using Sandbox.Common.Components;
 using Sandbox.Common.ObjectBuilders;
+using Sandbox.Common.ObjectBuilders.VRageData;
 using Sandbox.Definitions;
 using Sandbox.Engine;
 using Sandbox.Engine.Physics;
@@ -15,15 +16,29 @@ using Sandbox.Engine.Multiplayer;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
-using Sandbox.ModAPI.Interfaces;
 using VRageMath;
+using VRage;
+using VRage.ModAPI;
+using VRage.ObjectBuilders;
+using VRage.Components;
+using VRage.Utils;
 using Digi.Utils;
+using Digi.Helmet;
+
+using IMyDestroyableObject = Sandbox.ModAPI.Interfaces.IMyDestroyableObject;
+using IMyGravityGenerator = Sandbox.ModAPI.Ingame.IMyGravityGenerator;
+using IMyGravityGeneratorBase = Sandbox.ModAPI.Ingame.IMyGravityGeneratorBase;
+using IMyGravityGeneratorSphere = Sandbox.ModAPI.Ingame.IMyGravityGeneratorSphere;
 
 namespace Digi.Helmet
 {
     [MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation)]
     public class Helmet : MySessionComponentBase
     {
+        // TODO: finish 2nd helmet model
+        // TODO: remove glass toggle
+        // TODO: helmet on/off animation?
+        
         public bool init { get; private set; }
         public bool isServer { get; private set; }
         public bool isDedicated { get; private set; }
@@ -32,38 +47,39 @@ namespace Digi.Helmet
         private IMyEntity characterEntity = null;
         private bool removedHelmet = false;
         private bool removedHUD = false;
-        private bool lastState = false;
+        private bool lastState = true;
         private long lastReminder;
         private bool warningBlinkOn = true;
         private double lastWarningBlink = 0;
         
+        private float oldFov = 60;
+        private int slowUpdateFov = 0;
+        
+        private Vector3 gravityDir = Vector3.Zero;
+        private bool prevGravityDir = false;
+        private int slowUpdateGravDir = 0;
+        
         public IMyEntity[] iconEntities = new IMyEntity[Settings.TOTAL_ICONS];
         public IMyEntity[] iconBarEntities = new IMyEntity[Settings.TOTAL_ICONS];
-        
-        /*
-        private const int HEALTH = 0;
-        private const int ENERGY = 1;
-        private const int OXYGEN = 2;
-        private const int INVENTORY = 3;
-        private const int TOTAL = 4;
-        private string[] HudNames = new string[] { "Health", "Energy", "Oxygen", "Inventory" };
-        private double[] IconPosLeft = new double[] { 0.085, -0.075, 0.075, -0.085 };
-        private double[] IconPosTop = new double[] { -0.062, -0.07, -0.07, -0.062 };
-        private bool[] BarAlignLeft = new bool[] { false, true, false, true };
-        private int[] HudWarningPercent = new int[] { 15, 15, 15, -1 };
-        private IMyEntity[] HudIcons = new IMyEntity[TOTAL];
-        private IMyEntity[] HudBars = new IMyEntity[TOTAL];
-        private IMyEntity HudBroadcasting = null;
-        private IMyEntity HudDampeners = nufll;
-        private IMyEntity HudWarning = null;
-         */
         
         private const int HUD_BAR_MAX_SCALE = 380;
         private const float SCALE_DIST_ADJUST = 0.1f;
         private const float HUDSCALE_DIST_ADJUST = 0.1f;
         
-        private const string HELMET_PREFAB = "helmet";
+        private const string CUBE_HELMET_PREFIX = "Helmet_";
+        private const string CUBE_HUD_PREFIX = "HelmetHUD_";
         private const string MOD_NAME = "Helmet";
+        
+        private const string HELP_COMMANDS =
+            "/helmet for fov [number]   number is optional, quickly set scales for a specified FOV value\n" +
+            "/helmet <on/off>   turn the entire mod on or off\n" +
+            "/helmet scale <number>   -1.0 to 1.0, default 0\n" +
+            "/helmet hud <on/off>   turn the HUD component on or off\n" +
+            "/helmet hud scale <number>   -1.0 to 1.0, default 0\n" +
+            "/helmet reload   re-loads the config file (for advanced editing)\n" +
+            "\n" +
+            "For advanced editing go to:\n" +
+            "%appdata%\\SpaceEngineers\\Storage\\428842256_Helmet\\helmet.cfg";
         
         public void Init()
         {
@@ -97,7 +113,6 @@ namespace Digi.Helmet
             //var timer = new VRage.Library.Utils.MyGameTimer();
             Update();
             //MyAPIGateway.Utilities.ShowNotification(String.Format("elapsed={0:0.00000}ms", timer.Elapsed.Miliseconds), 16, MyFontEnum.Green);
-            //result: ~0.05ms
         }
         
         private void Update()
@@ -136,6 +151,24 @@ namespace Digi.Helmet
             if(characterEntity != null && (characterEntity.MarkedForClose || characterEntity.Closed))
                 characterEntity = null;
             
+            if(characterEntity != null && settings.autoFovScale)
+            {
+                if(++slowUpdateFov % 60 == 0)
+                {
+                    float fov = MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView);
+                    
+                    if(oldFov != fov)
+                    {
+                        settings.ScaleForFOV(fov);
+                        settings.Save();
+                        
+                        oldFov = fov;
+                    }
+                    
+                    slowUpdateFov = 0;
+                }
+            }
+            
             if(MyAPIGateway.Session.Player != null
                && MyAPIGateway.Session.Player.Controller != null
                && MyAPIGateway.Session.Player.Controller.ControlledEntity != null
@@ -159,8 +192,20 @@ namespace Digi.Helmet
                         
                         lastState = false;
                     }
-                    else if(lastState && (controlled is Sandbox.ModAPI.Ingame.IMyCockpit || controlled is Sandbox.ModAPI.Ingame.IMyRemoteControl))
+                    else if(lastState && (controlled is Sandbox.ModAPI.Ingame.IMyShipController))
                     {
+                        if(characterEntity == null && controlled.Hierarchy.Children.Count > 0)
+                        {
+                            foreach(var child in controlled.Hierarchy.Children)
+                            {
+                                if(child.Entity is IMyCharacter && child.Entity.DisplayName == MyAPIGateway.Session.Player.DisplayName)
+                                {
+                                    characterEntity = child.Entity;
+                                    break;
+                                }
+                            }
+                        }
+                        
                         if(characterEntity != null)
                         {
                             switch(AttachHelmet(characterEntity))
@@ -187,6 +232,23 @@ namespace Digi.Helmet
         
         private int AttachHelmet(IMyEntity charEnt)
         {
+            /* TODO use and test optimization
+            if(charEnt is IMyControllableEntity)
+            {
+                var contrEnt = charEnt as IMyControllableEntity;
+                
+                if(contrEnt.EnabledHelmet)
+                {
+                    UpdateHelmetAt(MyAPIGateway.Session.ControlledObject.GetHeadMatrix(true, true), charEnt.GetObjectBuilder(false) as MyObjectBuilder_Character);
+                    return 2;
+                }
+                
+                return 1;
+            }
+            
+            return 0;
+             */
+            
             var character = charEnt.GetObjectBuilder(false) as MyObjectBuilder_Character;
             
             if(character != null && character.CharacterModel != null)
@@ -250,28 +312,47 @@ namespace Digi.Helmet
         private MatrixD lastMatrix;
         private MatrixD temp;
         private Vector3D pos;
+        private int lastOxygenEnv = 0;
+        private bool fatalError = false;
         
         private void UpdateHelmetAt(MatrixD matrix, MyObjectBuilder_Character character)
         {
-            if(helmet == null)
+            if(fatalError)
+                return;
+            
+            if(helmet == null && settings.helmetModel != null)
             {
-                helmet = SpawnPrefab(HELMET_PREFAB);
+                helmet = SpawnPrefab(CUBE_HELMET_PREFIX + settings.helmetModel);
                 
                 if(helmet == null)
+                {
+                    Log.Error("Couldn't load the helmet prefab!");
+                    fatalError = true;
                     return;
+                }
             }
             
-            pos = matrix.Translation;
-            temp = MatrixD.Lerp(lastMatrix, matrix, (1.0f - settings.delayedRotation));
-            lastMatrix = matrix;
-            matrix = temp;
-            matrix.Translation = pos;
+            // No smoothing when in a cockpit/seat since it already is smoothed
+            if(!(MyAPIGateway.Session.Player.Controller.ControlledEntity.Entity is Sandbox.ModAPI.Ingame.IMyCockpit))
+            {
+                pos = matrix.Translation;
+                temp = MatrixD.Lerp(lastMatrix, matrix, (1.0f - settings.delayedRotation));
+                lastMatrix = matrix;
+                matrix = temp;
+                matrix.Translation = pos;
+            }
             
-            helmetMatrix = matrix;
-            helmetMatrix.Translation += matrix.Forward * (SCALE_DIST_ADJUST * (1.0 - settings.scale));
-            helmet.SetWorldMatrix(helmetMatrix);
+            if(helmet != null)
+            {
+                helmetMatrix = matrix;
+                helmetMatrix.Translation += matrix.Forward * (SCALE_DIST_ADJUST * (1.0 - settings.scale));
+                
+                if(helmet != null)
+                    helmet.SetWorldMatrix(helmetMatrix);
+                
+                removedHelmet = false;
+            }
             
-            removedHelmet = false;
             lastState = true;
             
             if(!settings.hud || character == null)
@@ -286,9 +367,10 @@ namespace Digi.Helmet
                 show[id] = settings.iconShow[id];
             }
             
-            values[Icons.HEALTH] = (character.Health.HasValue ? character.Health.Value : 100);
+            values[Icons.HEALTH] = (characterEntity is IMyDestroyableObject ? (characterEntity as IMyDestroyableObject).Integrity : 100);
             values[Icons.ENERGY] = (character.Battery != null ? character.Battery.CurrentCapacity * 10000000 : 0);
             values[Icons.OXYGEN] = character.OxygenLevel * 100;
+            values[Icons.OXYGEN_ENV] = (characterEntity as IMyCharacter).EnvironmentOxygenLevel * 2;
             values[Icons.INVENTORY] = 0;
             
             show[Icons.WARNING] = false;
@@ -325,15 +407,17 @@ namespace Digi.Helmet
                 show[Icons.WARNING] = true;
             }
             
+            bool noHud = MyAPIGateway.Session.Config.MinimalHud;
+            
             for(int id = 0; id < Settings.TOTAL_ICONS; id++)
             {
-                UpdateIcon(matrix, glassCurve, id, show[id], values[id]);
+                UpdateIcon(matrix, glassCurve, id, (show[id] ? (settings.iconNoHud[id] ? noHud : true) : false), values[id]);
             }
             
             removedHUD = false;
         }
         
-        private void UpdateIcon(MatrixD matrix, Vector3D head, int id, bool show, float percent)
+        private void UpdateIcon(MatrixD matrix, Vector3D headPos, int id, bool show, float percent)
         {
             if(!show)
             {
@@ -346,12 +430,66 @@ namespace Digi.Helmet
                 if(id == Icons.WARNING)
                     warningBlinkOn = true;
                 
+                if(settings.iconBar[id] && iconBarEntities[id] != null)
+                {
+                    iconBarEntities[id].Close();
+                    iconBarEntities[id] = null;
+                }
+                
                 return;
+            }
+            
+            string name = settings.iconNames[id].ToUpperFirst();
+            
+            if(id == Icons.OXYGEN_ENV)
+            {
+                int oxygenEnv = Math.Min(Math.Max((int)Math.Round(percent), 0), 2);
+                
+                if(iconEntities[id] != null && lastOxygenEnv != oxygenEnv)
+                {
+                    iconEntities[id].Close();
+                    iconEntities[id] = null;
+                }
+                
+                lastOxygenEnv = oxygenEnv;
+                name += oxygenEnv.ToString();
+            }
+            
+            if(id == Icons.GRAVITY)
+            {
+                if(++slowUpdateGravDir % 6 == 0)
+                {
+                    slowUpdateGravDir = 0;
+                    
+                    gravityDir = GetGravityAtPoint(characterEntity.WorldAABB.Center);
+                    //g = gravityDir.Length();
+                    gravityDir.Normalize();
+                    
+                    //MyAPIGateway.Utilities.ShowNotification("gravdir="+gravityDir+"; g="+g, 160, MyFontEnum.Green);
+                    
+                    if(prevGravityDir == (gravityDir == Vector3.Zero))
+                    {
+                        if(iconEntities[id] != null)
+                        {
+                            iconEntities[id].Close();
+                            iconEntities[id] = null;
+                        }
+                        
+                        MyAPIGateway.Utilities.ShowNotification("removed entity", 2000, MyFontEnum.Red);
+                        
+                        prevGravityDir = !prevGravityDir;
+                    }
+                }
+                
+                if(gravityDir == Vector3.Zero)
+                    name += "None";
+                else
+                    name += "Dir";
             }
             
             if(iconEntities[id] == null)
             {
-                iconEntities[id] = SpawnPrefab(settings.iconNames[id]);
+                iconEntities[id] = SpawnPrefab(CUBE_HUD_PREFIX + name);
                 
                 if(iconEntities[id] == null)
                     return;
@@ -365,7 +503,23 @@ namespace Digi.Helmet
             }
             
             matrix.Translation += (matrix.Left * settings.iconLeft[id]) + (matrix.Up * settings.iconUp[id]);
-            TransformHUD(ref matrix, matrix.Translation + matrix.Forward * 0.05, head, -matrix.Up, matrix.Forward);
+            
+            if(id == Icons.GRAVITY && gravityDir != Vector3.Zero)
+            {
+                matrix.Translation += matrix.Forward * 0.05;
+                
+                var pos = matrix.Translation;
+                
+                //Vector3 dir = gravityDir;
+                //dir += Vector3.Normalize(lastMatrix.Translation - matrix.Translation) / 2;
+                //dir.Normalize();
+                
+                AlignToVector(ref matrix, gravityDir);
+                iconEntities[id].SetWorldMatrix(matrix);
+                return;
+            }
+            
+            TransformHUD(ref matrix, matrix.Translation + matrix.Forward * 0.05, headPos, -matrix.Up, matrix.Forward);
             iconEntities[id].SetWorldMatrix(matrix);
             
             if(!settings.iconBar[id])
@@ -373,7 +527,7 @@ namespace Digi.Helmet
             
             if(iconBarEntities[id] == null)
             {
-                iconBarEntities[id] = SpawnPrefab(settings.iconNames[id] + "_bar");
+                iconBarEntities[id] = SpawnPrefab(CUBE_HUD_PREFIX + name + "Bar");
                 
                 if(iconBarEntities[id] == null)
                     return;
@@ -394,6 +548,30 @@ namespace Digi.Helmet
             matrix.M13 *= scale;
             
             iconBarEntities[id].SetWorldMatrix(matrix);
+        }
+        
+        private void AlignToVector(ref MatrixD matrix, Vector3D direction)
+        {
+            Vector3D vector3D = new Vector3D(0.0, 0.0, 1.0);
+            Vector3D up;
+            double z = direction.Z;
+            
+            if (z > -0.99999 && z < 0.99999)
+            {
+                vector3D -= direction * z;
+                vector3D = Vector3D.Normalize(vector3D);
+                up = Vector3D.Cross(direction, vector3D);
+            }
+            else
+            {
+                vector3D = new Vector3D(direction.Z, 0.0, -direction.X);
+                up = new Vector3D(0.0, 1.0, 0.0);
+            }
+            
+            matrix.Right = vector3D;
+            matrix.Up = up;
+            matrix.Forward = direction;
+            MatrixD.Rescale(ref matrix, -1); // CreateFromDir() makes the mesh's faces inverted, this fixes that
         }
         
         private void TransformHUD(ref MatrixD matrix, Vector3D pos, Vector3D head, Vector3D objUp, Vector3D? objForward)
@@ -431,39 +609,96 @@ namespace Digi.Helmet
             matrix.M44 = 1.0;
         }
         
+        private static SerializableVector3 PrefabVector0 = new SerializableVector3(0,0,0);
+        private static SerializableVector3I PrefabVectorI0 = new SerializableVector3I(0,0,0);
+        private static SerializableBlockOrientation PrefabOrientation = new SerializableBlockOrientation(Base6Directions.Direction.Forward, Base6Directions.Direction.Up);
+        private static MyObjectBuilder_CubeGrid PrefabBuilder = new MyObjectBuilder_CubeGrid()
+        {
+            EntityId = 0,
+            GridSizeEnum = MyCubeSize.Small,
+            IsStatic = true,
+            Skeleton = new List<BoneInfo>(),
+            LinearVelocity = PrefabVector0,
+            AngularVelocity = PrefabVector0,
+            ConveyorLines = new List<MyObjectBuilder_ConveyorLine>(),
+            BlockGroups = new List<MyObjectBuilder_BlockGroup>(),
+            Handbrake = false,
+            XMirroxPlane = null,
+            YMirroxPlane = null,
+            ZMirroxPlane = null,
+            PersistentFlags = MyPersistentEntityFlags2.InScene,
+            Name = "",
+            DisplayName = "",
+            CreatePhysics = false,
+            PositionAndOrientation = new MyPositionAndOrientation(Vector3D.Zero, Vector3D.Forward, Vector3D.Up),
+            CubeBlocks = new List<MyObjectBuilder_CubeBlock>()
+            {
+                new MyObjectBuilder_TerminalBlock()
+                {
+                    EntityId = 1,
+                    SubtypeName = "",
+                    Min = PrefabVectorI0,
+                    BlockOrientation = PrefabOrientation,
+                    ColorMaskHSV = PrefabVector0,
+                    ShareMode = MyOwnershipShareModeEnum.None,
+                    DeformationRatio = 0,
+                    ShowOnHUD = false,
+                }
+            }
+        };
+        
         private IMyEntity SpawnPrefab(string name)
         {
-            var prefab = MyDefinitionManager.Static.GetPrefabDefinition(name);
+            PrefabBuilder.CubeBlocks[0].SubtypeName = name;
             
-            if(prefab == null)
-            {
-                Log.Error("Can't find prefab: " + name);
-                return null;
-            }
-            
-            if(prefab.CubeGrids == null)
-            {
-                MyDefinitionManager.Static.ReloadPrefabsFromFile(prefab.PrefabPath);
-                prefab = MyDefinitionManager.Static.GetPrefabDefinition(name);
-            }
-            
-            MyObjectBuilder_CubeGrid builder = prefab.CubeGrids[0].Clone() as MyObjectBuilder_CubeGrid;
-            builder.PersistentFlags = MyPersistentEntityFlags2.InScene;
-            builder.Name = "";
-            builder.DisplayName = "";
-            builder.CreatePhysics = false;
-            builder.PositionAndOrientation = new MyPositionAndOrientation(Vector3D.Zero, Vector3D.Forward, Vector3D.Up);
-            
-            MyAPIGateway.Entities.RemapObjectBuilder(builder);
-            var ent = MyAPIGateway.Entities.CreateFromObjectBuilder(builder);
+            MyAPIGateway.Entities.RemapObjectBuilder(PrefabBuilder);
+            var ent = MyAPIGateway.Entities.CreateFromObjectBuilder(PrefabBuilder);
             ent.Flags &= ~EntityFlags.Sync; // don't sync on MP
             ent.Flags &= ~EntityFlags.Save; // don't save this entity
+            ent.PersistentFlags &= ~MyPersistentEntityFlags2.CastShadows;
+            ent.CastShadows = false;
             
             MyAPIGateway.Entities.AddEntity(ent, true);
-            
-            ent.Render.CastShadows = false;
-            
             return ent;
+        }
+        
+        public static List<IMyGravityGeneratorBase> gravityGenerators = new List<IMyGravityGeneratorBase>();
+        
+        public static Vector3 GetGravityAtPoint(Vector3D point)
+        {
+            Vector3 gravity = Vector3.Zero;
+            
+            foreach (var generator in gravityGenerators)
+            {
+                if(generator.IsWorking)
+                {
+                    if(generator is IMyGravityGeneratorSphere)
+                    {
+                        var gen = (generator as IMyGravityGeneratorSphere);
+                        
+                        if(Vector3D.DistanceSquared(generator.WorldMatrix.Translation, point) <= (gen.Radius * gen.Radius))
+                        {
+                            var dir = generator.WorldMatrix.Translation - point;
+                            dir.Normalize();
+                            gravity += (Vector3)dir * (gen.Gravity / 9.81f); // TODO: remove division once gravity value is fixed
+                        }
+                    }
+                    else if(generator is IMyGravityGenerator)
+                    {
+                        var gen = (generator as IMyGravityGenerator);
+                        
+                        var halfExtents = new Vector3(gen.FieldWidth / 2, gen.FieldHeight / 2, gen.FieldDepth / 2);
+                        var box = new MyOrientedBoundingBoxD(gen.WorldMatrix.Translation, halfExtents, Quaternion.CreateFromRotationMatrix(gen.WorldMatrix));
+                        
+                        if(box.Contains(ref point))
+                        {
+                            gravity += gen.WorldMatrix.Down * gen.Gravity;
+                        }
+                    }
+                }
+            }
+            
+            return gravity;
         }
         
         public void MessageEntered(string msg, ref bool visible)
@@ -591,18 +826,90 @@ namespace Digi.Helmet
                 {
                     settings.Load();
                     MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Reloaded settings from the config file.");
-                    MyAPIGateway.Utilities.ShowMessage("Config path", "%appdata%\\SpaceEngineers\\Storage\\428842256_Helmet\\helmet.cfg");
+                    
+                    if(helmet != null)
+                    {
+                        helmet.Close();
+                        helmet = null;
+                    }
+                    
                     return;
                 }
             }
             
-            MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Available commands:");
-            MyAPIGateway.Utilities.ShowMessage("/helmet for fov [number] ", "number is optional, quickly set scales for a specified FOV value");
-            MyAPIGateway.Utilities.ShowMessage("/helmet <on/off> ", "turn the entire mod on or off");
-            MyAPIGateway.Utilities.ShowMessage("/helmet scale <number> ", "-1.0 to 1.0, default 0");
-            MyAPIGateway.Utilities.ShowMessage("/helmet hud <on/off> ", "turn the HUD component on or off");
-            MyAPIGateway.Utilities.ShowMessage("/helmet hud scale <number> ", "-1.0 to 1.0, default 0");
-            MyAPIGateway.Utilities.ShowMessage("/helmet reload ", "re-loads the config file (for advanced editing)");
+            MyAPIGateway.Utilities.ShowMissionScreen("Helmet Mod Commands", "", "You can type these commands in the chat.", HELP_COMMANDS, null, "Close");
+        }
+    }
+    
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_CubeGrid))]
+    public class Grid : MyGameLogicComponent
+    {
+        private MyObjectBuilder_EntityBase objectBuilder;
+        
+        public override void Init(MyObjectBuilder_EntityBase objectBuilder)
+        {
+            this.objectBuilder = objectBuilder;
+            
+            Entity.NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+        }
+        
+        public override void UpdateOnceBeforeFrame()
+        {
+            var grid = Entity as IMyCubeGrid;
+            
+            // find existing gravity generators
+            List<IMySlimBlock> blocks = new List<IMySlimBlock>();
+            grid.GetBlocks(blocks, b => b.FatBlock is IMyGravityGeneratorBase);
+            
+            foreach(var slimBlock in blocks)
+            {
+                Helmet.gravityGenerators.Add(slimBlock.FatBlock as IMyGravityGeneratorBase);
+            }
+            
+            // monitor generator adding/removing
+            grid.OnBlockAdded += BlockAdded;
+            grid.OnBlockRemoved += BlockRemoved;
+        }
+        
+        public void BlockAdded(IMySlimBlock slimBlock)
+        {
+            if(slimBlock.FatBlock is IMyGravityGeneratorBase)
+            {
+                Helmet.gravityGenerators.Add(slimBlock.FatBlock as IMyGravityGeneratorBase);
+            }
+        }
+        
+        public void BlockRemoved(IMySlimBlock slimBlock)
+        {
+            if(slimBlock.FatBlock is IMyGravityGeneratorBase)
+            {
+                Helmet.gravityGenerators.Remove(slimBlock.FatBlock as IMyGravityGeneratorBase);
+            }
+        }
+        
+        public override void Close()
+        {
+            // grid removed, clean stuff
+            Helmet.gravityGenerators.RemoveAll(g => g.CubeGrid.EntityId == Entity.EntityId);
+            objectBuilder = null;
+        }
+        
+        public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)
+        {
+            return copy ? (MyObjectBuilder_EntityBase)objectBuilder.Clone() : objectBuilder;
+        }
+    }
+    
+    public static class Extensions
+    {
+        public static string ToUpperFirst(this string s)
+        {
+            if (string.IsNullOrEmpty(s))
+                return string.Empty;
+            
+            char[] a = s.ToCharArray();
+            a[0] = char.ToUpper(a[0]);
+            return new string(a);
         }
     }
 }

@@ -5,15 +5,15 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>Helmet3D</SubtypeId>
+        <SubtypeId>Helmet_vignette</SubtypeId>
       </Id>
-      <DisplayName>Helmet3D</DisplayName>
+      <DisplayName>Helmet_vignette</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
       <Size x="1" y="1" z="1" />
       <ModelOffset x="0" y="0" z="0" />
-      <Model>Models\Helmet.mwm</Model>
+      <Model>Models\Helmet_Vignette.mwm</Model>
       <Components>
         <Component Subtype="SteelPlate" Count="1" />
       </Components>
@@ -152,6 +152,67 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
+        <SubtypeId>HelmetHUD_Oxygenenv0</SubtypeId>
+      </Id>
+      <DisplayName>HelmetHUD_Oxygenenv0</DisplayName>
+      <Icon>Textures\FAKE.dds</Icon>
+      <CubeSize>Small</CubeSize>
+      <BlockTopology>TriangleMesh</BlockTopology>
+      <Size x="1" y="1" z="1" />
+      <ModelOffset x="0" y="0" z="0" />
+      <Model>Models\OxygenEnv0.mwm</Model>
+      <Components>
+        <Component Subtype="SteelPlate" Count="1" />
+      </Components>
+      <CriticalComponent Subtype="SteelPlate" Index="0" />
+      <EdgeType>Light</EdgeType>
+      <BuildTimeSeconds>999999</BuildTimeSeconds>
+      <Public>false</Public>
+    </Definition>
+    <Definition>
+      <Id>
+        <TypeId>TerminalBlock</TypeId>
+        <SubtypeId>HelmetHUD_Oxygenenv1</SubtypeId>
+      </Id>
+      <DisplayName>HelmetHUD_Oxygenenv1</DisplayName>
+      <Icon>Textures\FAKE.dds</Icon>
+      <CubeSize>Small</CubeSize>
+      <BlockTopology>TriangleMesh</BlockTopology>
+      <Size x="1" y="1" z="1" />
+      <ModelOffset x="0" y="0" z="0" />
+      <Model>Models\OxygenEnv1.mwm</Model>
+      <Components>
+        <Component Subtype="SteelPlate" Count="1" />
+      </Components>
+      <CriticalComponent Subtype="SteelPlate" Index="0" />
+      <EdgeType>Light</EdgeType>
+      <BuildTimeSeconds>999999</BuildTimeSeconds>
+      <Public>false</Public>
+    </Definition>
+    <Definition>
+      <Id>
+        <TypeId>TerminalBlock</TypeId>
+        <SubtypeId>HelmetHUD_Oxygenenv2</SubtypeId>
+      </Id>
+      <DisplayName>HelmetHUD_Oxygenenv2</DisplayName>
+      <Icon>Textures\FAKE.dds</Icon>
+      <CubeSize>Small</CubeSize>
+      <BlockTopology>TriangleMesh</BlockTopology>
+      <Size x="1" y="1" z="1" />
+      <ModelOffset x="0" y="0" z="0" />
+      <Model>Models\OxygenEnv2.mwm</Model>
+      <Components>
+        <Component Subtype="SteelPlate" Count="1" />
+      </Components>
+      <CriticalComponent Subtype="SteelPlate" Index="0" />
+      <EdgeType>Light</EdgeType>
+      <BuildTimeSeconds>999999</BuildTimeSeconds>
+      <Public>false</Public>
+    </Definition>
+
+    <Definition>
+      <Id>
+        <TypeId>TerminalBlock</TypeId>
         <SubtypeId>HelmetHUD_Inventory</SubtypeId>
       </Id>
       <DisplayName>HelmetHUD_Inventory</DisplayName>
@@ -244,6 +305,47 @@
       <Size x="1" y="1" z="1" />
       <ModelOffset x="0" y="0" z="0" />
       <Model>Models\Warning.mwm</Model>
+      <Components>
+        <Component Subtype="SteelPlate" Count="1" />
+      </Components>
+      <CriticalComponent Subtype="SteelPlate" Index="0" />
+      <EdgeType>Light</EdgeType>
+      <BuildTimeSeconds>999999</BuildTimeSeconds>
+      <Public>false</Public>
+    </Definition>
+
+    <Definition>
+      <Id>
+        <TypeId>TerminalBlock</TypeId>
+        <SubtypeId>HelmetHUD_GravityDir</SubtypeId>
+      </Id>
+      <DisplayName>HelmetHUD_GravityDir</DisplayName>
+      <Icon>Textures\FAKE.dds</Icon>
+      <CubeSize>Small</CubeSize>
+      <BlockTopology>TriangleMesh</BlockTopology>
+      <Size x="1" y="1" z="1" />
+      <ModelOffset x="0" y="0" z="0" />
+      <Model>Models\GravityDir.mwm</Model>
+      <Components>
+        <Component Subtype="SteelPlate" Count="1" />
+      </Components>
+      <CriticalComponent Subtype="SteelPlate" Index="0" />
+      <EdgeType>Light</EdgeType>
+      <BuildTimeSeconds>999999</BuildTimeSeconds>
+      <Public>false</Public>
+    </Definition>
+    <Definition>
+      <Id>
+        <TypeId>TerminalBlock</TypeId>
+        <SubtypeId>HelmetHUD_GravityNone</SubtypeId>
+      </Id>
+      <DisplayName>HelmetHUD_GravityNone</DisplayName>
+      <Icon>Textures\FAKE.dds</Icon>
+      <CubeSize>Small</CubeSize>
+      <BlockTopology>TriangleMesh</BlockTopology>
+      <Size x="1" y="1" z="1" />
+      <ModelOffset x="0" y="0" z="0" />
+      <Model>Models\NoGravity.mwm</Model>
       <Components>
         <Component Subtype="SteelPlate" Count="1" />
       </Components>

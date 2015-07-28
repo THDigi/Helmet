@@ -5,9 +5,9 @@
     <TransparentMaterial>
       <Id>
         <TypeId>TransparentMaterialDefinition</TypeId>
-        <SubtypeId>HelmetGlass</SubtypeId>
+        <SubtypeId>HelmetVignette</SubtypeId>
       </Id>
-      <Texture>Textures\HelmetGlass.dds</Texture>
+      <Texture>Textures\Vignette.dds</Texture>
       <SoftParticleDistanceScale>1000</SoftParticleDistanceScale>
       <CanBeAffectedByOtherLights>false</CanBeAffectedByOtherLights>
       <AlphaMistingEnable>false</AlphaMistingEnable>
@@ -15,7 +15,7 @@
       <UseAtlas>false</UseAtlas>
 	<NeedSort>false</NeedSort>
       <Emissivity>0</Emissivity>
-	<Reflectivity>0.05</Reflectivity>
+	<Reflectivity>0.2</Reflectivity>
       <UVOffset>
         <X>0</X>
         <Y>0</Y>
@@ -25,9 +25,9 @@
         <Y>1</Y>
       </UVSize>
 	<Color>
-        <X>1.0</X>
-        <Y>1.0</Y>
-	  <Z>1.0</Z>
+        <X>0.75</X>
+        <Y>0.75</Y>
+	  <Z>0.75</Z>
 	  <W>0.01</W>
       </Color>
     </TransparentMaterial>
@@ -44,8 +44,8 @@
 	<IgnoreDepth>true</IgnoreDepth>
       <UseAtlas>false</UseAtlas>
 	<NeedSort>false</NeedSort>
-      <Emissivity>0.01</Emissivity>
-	<Reflectivity>0.0</Reflectivity>
+      <Emissivity>0.5</Emissivity>
+	<Reflectivity>0</Reflectivity>
       <UVOffset>
         <X>0</X>
         <Y>0</Y>
@@ -55,9 +55,39 @@
         <Y>1</Y>
       </UVSize>
 	<Color>
-        <X>0.7</X>
-        <Y>0.7</Y>
-	  <Z>0.7</Z>
+        <X>0.75</X>
+        <Y>0.75</Y>
+	  <Z>0.75</Z>
+	  <W>0.01</W>
+      </Color>
+    </TransparentMaterial>
+
+    <TransparentMaterial>
+      <Id>
+        <TypeId>TransparentMaterialDefinition</TypeId>
+        <SubtypeId>Invisible</SubtypeId>
+      </Id>
+      <Texture>Textures\Invisible.dds</Texture>
+      <SoftParticleDistanceScale>1000</SoftParticleDistanceScale>
+      <CanBeAffectedByOtherLights>false</CanBeAffectedByOtherLights>
+      <AlphaMistingEnable>false</AlphaMistingEnable>
+	<IgnoreDepth>true</IgnoreDepth>
+      <UseAtlas>false</UseAtlas>
+	<NeedSort>false</NeedSort>
+      <Emissivity>0.0</Emissivity>
+	<Reflectivity>0</Reflectivity>
+      <UVOffset>
+        <X>0</X>
+        <Y>0</Y>
+      </UVOffset>
+      <UVSize>
+        <X>1</X>
+        <Y>1</Y>
+      </UVSize>
+	<Color>
+        <X>0.01</X>
+        <Y>0.01</Y>
+	  <Z>0.01</Z>
 	  <W>0.01</W>
       </Color>
     </TransparentMaterial>
