@@ -15,7 +15,7 @@
       <UseAtlas>false</UseAtlas>
 	<NeedSort>false</NeedSort>
       <Emissivity>0</Emissivity>
-	<Reflectivity>0.2</Reflectivity>
+	<Reflectivity>0.3</Reflectivity>
       <UVOffset>
         <X>0</X>
         <Y>0</Y>
@@ -25,10 +25,40 @@
         <Y>1</Y>
       </UVSize>
 	<Color>
-        <X>0.75</X>
-        <Y>0.75</Y>
-	  <Z>0.75</Z>
-	  <W>0.01</W>
+        <X>1.0</X>
+        <Y>1.0</Y>
+	  <Z>1.0</Z>
+	  <W>0.0075</W>
+      </Color>
+    </TransparentMaterial>
+
+    <TransparentMaterial>
+      <Id>
+        <TypeId>TransparentMaterialDefinition</TypeId>
+        <SubtypeId>HelmetVignette_NoReflection</SubtypeId>
+      </Id>
+      <Texture>Textures\Vignette.dds</Texture>
+      <SoftParticleDistanceScale>1000</SoftParticleDistanceScale>
+      <CanBeAffectedByOtherLights>false</CanBeAffectedByOtherLights>
+      <AlphaMistingEnable>false</AlphaMistingEnable>
+	<IgnoreDepth>false</IgnoreDepth>
+      <UseAtlas>false</UseAtlas>
+	<NeedSort>false</NeedSort>
+      <Emissivity>0</Emissivity>
+	<Reflectivity>0.000000001</Reflectivity>
+      <UVOffset>
+        <X>0</X>
+        <Y>0</Y>
+      </UVOffset>
+      <UVSize>
+        <X>1</X>
+        <Y>1</Y>
+      </UVSize>
+	<Color>
+        <X>1.0</X>
+        <Y>1.0</Y>
+	  <Z>1.0</Z>
+	  <W>0.0075</W>
       </Color>
     </TransparentMaterial>
 

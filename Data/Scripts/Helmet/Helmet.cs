@@ -36,7 +36,6 @@ namespace Digi.Helmet
     public class Helmet : MySessionComponentBase
     {
         // TODO: finish 2nd helmet model
-        // TODO: remove glass toggle
         // TODO: helmet on/off animation?
         
         public bool init { get; private set; }
@@ -59,8 +58,8 @@ namespace Digi.Helmet
         private bool prevGravityDir = false;
         private int slowUpdateGravDir = 0;
         
-        public IMyEntity[] iconEntities = new IMyEntity[Settings.TOTAL_ICONS];
-        public IMyEntity[] iconBarEntities = new IMyEntity[Settings.TOTAL_ICONS];
+        public IMyEntity[] iconEntities = new IMyEntity[Settings.TOTAL_ELEMENTS];
+        public IMyEntity[] iconBarEntities = new IMyEntity[Settings.TOTAL_ELEMENTS];
         
         private const int HUD_BAR_MAX_SCALE = 380;
         private const float SCALE_DIST_ADJUST = 0.1f;
@@ -220,7 +219,7 @@ namespace Digi.Helmet
                         
                         if(controlled is Sandbox.ModAPI.Ingame.IMyCockpit)
                         {
-                            UpdateHelmetAt(MyAPIGateway.Session.ControlledObject.GetHeadMatrix(true, true), null);
+                            UpdateHelmetAt(MyAPIGateway.Session.ControlledObject.GetHeadMatrix(true, true));
                             return;
                         }
                     }
@@ -232,14 +231,13 @@ namespace Digi.Helmet
         
         private int AttachHelmet(IMyEntity charEnt)
         {
-            /* TODO use and test optimization
             if(charEnt is IMyControllableEntity)
             {
                 var contrEnt = charEnt as IMyControllableEntity;
                 
                 if(contrEnt.EnabledHelmet)
                 {
-                    UpdateHelmetAt(MyAPIGateway.Session.ControlledObject.GetHeadMatrix(true, true), charEnt.GetObjectBuilder(false) as MyObjectBuilder_Character);
+                    UpdateHelmetAt(MyAPIGateway.Session.ControlledObject.GetHeadMatrix(true, true));
                     return 2;
                 }
                 
@@ -247,8 +245,8 @@ namespace Digi.Helmet
             }
             
             return 0;
-             */
             
+            /*
             var character = charEnt.GetObjectBuilder(false) as MyObjectBuilder_Character;
             
             if(character != null && character.CharacterModel != null)
@@ -265,6 +263,7 @@ namespace Digi.Helmet
             }
             
             return 0;
+             */
         }
         
         private void RemoveHelmet()
@@ -290,7 +289,7 @@ namespace Digi.Helmet
             
             removedHUD = true;
             
-            for(int id = 0; id < Settings.TOTAL_ICONS; id++)
+            for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
             {
                 if(iconEntities[id] != null)
                 {
@@ -307,22 +306,36 @@ namespace Digi.Helmet
         }
         
         private MatrixD helmetMatrix;
-        private float[] values = new float[Settings.TOTAL_ICONS];
-        private bool[] show = new bool[Settings.TOTAL_ICONS];
+        private float[] values = new float[Settings.TOTAL_ELEMENTS];
+        private bool[] show = new bool[Settings.TOTAL_ELEMENTS];
         private MatrixD lastMatrix;
         private MatrixD temp;
         private Vector3D pos;
         private int lastOxygenEnv = 0;
         private bool fatalError = false;
         
-        private void UpdateHelmetAt(MatrixD matrix, MyObjectBuilder_Character character)
+        private MyObjectBuilder_Character characterObject;
+        private int slowUpdateCharObj = 0;
+        
+        private void UpdateHelmetAt(MatrixD matrix)
         {
             if(fatalError)
-                return;
+                return; // stop trying if a fatal error occurs
             
+            bool slowUpdate = false; // slow update stats later on
+            
+            // Update the character object slowly
+            if(++slowUpdateCharObj % 10 == 0)
+            {
+                slowUpdateCharObj = 0;
+                slowUpdate = true;
+                characterObject = characterEntity.GetObjectBuilder(false) as MyObjectBuilder_Character;
+            }
+            
+            // Spawn the helmet model if it's not spawned
             if(helmet == null && settings.helmetModel != null)
             {
-                helmet = SpawnPrefab(CUBE_HELMET_PREFIX + settings.helmetModel);
+                helmet = SpawnPrefab(CUBE_HELMET_PREFIX + settings.helmetModel + (settings.glass ? "" : "NoReflection"));
                 
                 if(helmet == null)
                 {
@@ -342,59 +355,60 @@ namespace Digi.Helmet
                 matrix.Translation = pos;
             }
             
-            if(helmet != null)
-            {
-                helmetMatrix = matrix;
-                helmetMatrix.Translation += matrix.Forward * (SCALE_DIST_ADJUST * (1.0 - settings.scale));
-                
-                if(helmet != null)
-                    helmet.SetWorldMatrix(helmetMatrix);
-                
-                removedHelmet = false;
-            }
+            // Align the helmet mesh
+            helmetMatrix = matrix;
+            helmetMatrix.Translation += matrix.Forward * (SCALE_DIST_ADJUST * (1.0 - settings.scale));
             
+            if(helmet != null)
+                helmet.SetWorldMatrix(helmetMatrix);
+            
+            removedHelmet = false;
             lastState = true;
             
-            if(!settings.hud || character == null)
+            // if HUD is disabled or we can't get the info, remove the HUD (if exists) and stop here
+            if(!settings.hud || characterObject == null)
             {
                 RemoveHud();
                 return;
             }
             
-            for(int id = 0; id < Settings.TOTAL_ICONS; id++)
+            if(slowUpdate)
             {
-                values[id] = 0;
-                show[id] = settings.iconShow[id];
-            }
-            
-            values[Icons.HEALTH] = (characterEntity is IMyDestroyableObject ? (characterEntity as IMyDestroyableObject).Integrity : 100);
-            values[Icons.ENERGY] = (character.Battery != null ? character.Battery.CurrentCapacity * 10000000 : 0);
-            values[Icons.OXYGEN] = character.OxygenLevel * 100;
-            values[Icons.OXYGEN_ENV] = (characterEntity as IMyCharacter).EnvironmentOxygenLevel * 2;
-            values[Icons.INVENTORY] = 0;
-            
-            show[Icons.WARNING] = false;
-            show[Icons.BROADCASTING] = character.EnableBroadcasting;
-            show[Icons.DAMPENERS] = character.DampenersEnabled;
-            
-            var invOwner = (characterEntity as Sandbox.ModAPI.Interfaces.IMyInventoryOwner);
-            
-            if(invOwner != null && invOwner.InventoryCount > 0)
-            {
-                var inv = invOwner.GetInventory(0);
+                // show and value cache for the HUD elements
+                for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
+                {
+                    values[id] = 0;
+                    show[id] = settings.elements[id].show;
+                }
                 
-                if(inv != null)
-                    values[Icons.INVENTORY] = ((float)inv.CurrentVolume / (float)inv.MaxVolume) * 100;
+                show[Icons.BROADCASTING] = characterObject.EnableBroadcasting;
+                show[Icons.DAMPENERS] = characterObject.DampenersEnabled;
+                
+                values[Icons.HEALTH] = (characterEntity is IMyDestroyableObject ? (characterEntity as IMyDestroyableObject).Integrity : 100);
+                values[Icons.ENERGY] = (characterObject.Battery != null ? characterObject.Battery.CurrentCapacity * 10000000 : 0);
+                values[Icons.OXYGEN] = characterObject.OxygenLevel * 100;
+                values[Icons.OXYGEN_ENV] = (characterEntity as IMyCharacter).EnvironmentOxygenLevel * 2;
+                values[Icons.INVENTORY] = 0;
+                
+                // Get the inventory volume
+                var invOwner = (characterEntity as Sandbox.ModAPI.Interfaces.IMyInventoryOwner);
+                
+                if(invOwner != null && invOwner.InventoryCount > 0)
+                {
+                    var inv = invOwner.GetInventory(0);
+                    
+                    if(inv != null)
+                        values[Icons.INVENTORY] = ((float)inv.CurrentVolume / (float)inv.MaxVolume) * 100;
+                }
             }
             
-            matrix.Translation += matrix.Forward * (HUDSCALE_DIST_ADJUST * (1.0 - settings.hudScale));
+            // Update the warning icon
+            show[Icons.WARNING] = false;
             
-            var glassCurve = matrix.Translation + (matrix.Backward * 0.25);
-            
-            if(settings.iconShow[Icons.WARNING] &&
-               (values[Icons.HEALTH] <= settings.iconWarnPercent[Icons.HEALTH]
-                || values[Icons.ENERGY] <= settings.iconWarnPercent[Icons.ENERGY]
-                || values[Icons.OXYGEN] <= settings.iconWarnPercent[Icons.OXYGEN]))
+            if(settings.elements[Icons.WARNING].show &&
+               (values[Icons.HEALTH] <= settings.elements[Icons.HEALTH].warnPercent
+                || values[Icons.ENERGY] <= settings.elements[Icons.ENERGY].warnPercent
+                || values[Icons.OXYGEN] <= settings.elements[Icons.OXYGEN].warnPercent))
             {
                 double tick = DateTime.UtcNow.Ticks;
                 
@@ -407,20 +421,41 @@ namespace Digi.Helmet
                 show[Icons.WARNING] = true;
             }
             
-            bool noHud = MyAPIGateway.Session.Config.MinimalHud;
+            matrix.Translation += matrix.Forward * (HUDSCALE_DIST_ADJUST * (1.0 - settings.hudScale)); // off-set the HUD according to the HUD scale
+            var headPos = matrix.Translation + (matrix.Backward * 0.25); // for glass curve effect
+            bool hudVisible = !MyAPIGateway.Session.Config.MinimalHud; // if the vanilla HUD is on or off
+            removedHUD = false; // mark the HUD as not removed because we're about to spawn it
             
-            for(int id = 0; id < Settings.TOTAL_ICONS; id++)
+            // spawn and update the HUD elements
+            for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
             {
-                UpdateIcon(matrix, glassCurve, id, (show[id] ? (settings.iconNoHud[id] ? noHud : true) : false), values[id]);
+                bool showIcon = show[id];
+                
+                if(showIcon)
+                {
+                    switch(settings.elements[id].hudMode)
+                    {
+                        case 1:
+                            showIcon = hudVisible;
+                            break;
+                        case 2:
+                            showIcon = !hudVisible;
+                            break;
+                    }
+                }
+                
+                UpdateIcon(matrix, headPos, id, showIcon, values[id]);
             }
-            
-            removedHUD = false;
         }
         
         private void UpdateIcon(MatrixD matrix, Vector3D headPos, int id, bool show, float percent)
         {
+            HudElement element = settings.elements[id];
+            
+            // if the element should be hidden, take action!
             if(!show)
             {
+                // remove the element itself if it exists
                 if(iconEntities[id] != null)
                 {
                     iconEntities[id].Close();
@@ -428,19 +463,21 @@ namespace Digi.Helmet
                 }
                 
                 if(id == Icons.WARNING)
-                    warningBlinkOn = true;
+                    warningBlinkOn = true; // reset the blink status for the warning icon
                 
-                if(settings.iconBar[id] && iconBarEntities[id] != null)
+                // remove the bar if it has one and it exists
+                if(element.hasBar && iconBarEntities[id] != null)
                 {
                     iconBarEntities[id].Close();
                     iconBarEntities[id] = null;
                 }
                 
-                return;
+                return; // and STOP!
             }
             
-            string name = settings.iconNames[id].ToUpperFirst();
+            string name = element.name;
             
+            // append the oxygen level number to the name and remove the previous entity if changed
             if(id == Icons.OXYGEN_ENV)
             {
                 int oxygenEnv = Math.Min(Math.Max((int)Math.Round(percent), 0), 2);
@@ -455,6 +492,7 @@ namespace Digi.Helmet
                 name += oxygenEnv.ToString();
             }
             
+            // set the gravity icon type and update the gravity direction
             if(id == Icons.GRAVITY)
             {
                 if(++slowUpdateGravDir % 6 == 0)
@@ -462,10 +500,9 @@ namespace Digi.Helmet
                     slowUpdateGravDir = 0;
                     
                     gravityDir = GetGravityAtPoint(characterEntity.WorldAABB.Center);
-                    //g = gravityDir.Length();
-                    gravityDir.Normalize();
                     
-                    //MyAPIGateway.Utilities.ShowNotification("gravdir="+gravityDir+"; g="+g, 160, MyFontEnum.Green);
+                    if(gravityDir != Vector3.Zero)
+                        gravityDir.Normalize();
                     
                     if(prevGravityDir == (gravityDir == Vector3.Zero))
                     {
@@ -474,8 +511,6 @@ namespace Digi.Helmet
                             iconEntities[id].Close();
                             iconEntities[id] = null;
                         }
-                        
-                        MyAPIGateway.Utilities.ShowNotification("removed entity", 2000, MyFontEnum.Red);
                         
                         prevGravityDir = !prevGravityDir;
                     }
@@ -487,6 +522,7 @@ namespace Digi.Helmet
                     name += "Dir";
             }
             
+            // spawn the element if it's not already
             if(iconEntities[id] == null)
             {
                 iconEntities[id] = SpawnPrefab(CUBE_HUD_PREFIX + name);
@@ -495,6 +531,7 @@ namespace Digi.Helmet
                     return;
             }
             
+            // blink the warning icon by moving it out of view and back in view
             if(id == Icons.WARNING && !warningBlinkOn)
             {
                 matrix.Translation += (matrix.Backward * 10);
@@ -502,13 +539,12 @@ namespace Digi.Helmet
                 return;
             }
             
-            matrix.Translation += (matrix.Left * settings.iconLeft[id]) + (matrix.Up * settings.iconUp[id]);
+            matrix.Translation += (matrix.Left * element.posLeft) + (matrix.Up * element.posUp);
             
+            // update the gravity indicator
             if(id == Icons.GRAVITY && gravityDir != Vector3.Zero)
             {
                 matrix.Translation += matrix.Forward * 0.05;
-                
-                var pos = matrix.Translation;
                 
                 //Vector3 dir = gravityDir;
                 //dir += Vector3.Normalize(lastMatrix.Translation - matrix.Translation) / 2;
@@ -519,11 +555,12 @@ namespace Digi.Helmet
                 return;
             }
             
+            // align the element to the view and give it the glass curve
             TransformHUD(ref matrix, matrix.Translation + matrix.Forward * 0.05, headPos, -matrix.Up, matrix.Forward);
             iconEntities[id].SetWorldMatrix(matrix);
             
-            if(!settings.iconBar[id])
-                return;
+            if(!element.hasBar)
+                return; // if the HUD element has no bar, stop here.
             
             if(iconBarEntities[id] == null)
             {
@@ -533,15 +570,17 @@ namespace Digi.Helmet
                     return;
             }
             
-            if(!warningBlinkOn && percent <= settings.iconWarnPercent[id])
+            // blink the bar along with the warning icon
+            if(!warningBlinkOn && percent <= element.warnPercent)
             {
                 matrix.Translation += (matrix.Backward * 10);
                 iconBarEntities[id].SetWorldMatrix(matrix);
                 return;
             }
             
+            // calculate the bar size
             double scale = Math.Min(Math.Max((percent * HUD_BAR_MAX_SCALE) / 100, 0), HUD_BAR_MAX_SCALE);
-            var align = (settings.iconFlipVertical[id] ? matrix.Left : matrix.Right);
+            var align = (element.flipHorizontal ? matrix.Left : matrix.Right);
             matrix.Translation += (align * (scale / 100.0)) - (align * (0.0097 + (0.0008 * (0.5 - (percent / 100)))));
             matrix.M11 *= scale;
             matrix.M12 *= scale;

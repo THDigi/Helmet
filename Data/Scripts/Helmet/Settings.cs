@@ -23,16 +23,33 @@ using Digi.Utils;
 
 namespace Digi.Helmet
 {
+    public class HudElement
+    {
+        public string name;
+        public bool show = true;
+        public bool hasBar = false;
+        public double posLeft = 0;
+        public double posUp = 0;
+        public bool flipHorizontal = false;
+        public int warnPercent = -1;
+        public int hudMode = 0;
+        
+        public HudElement(string name)
+        {
+            this.name = name;
+        }
+    }
+    
     public class Icons
     {
         public const int WARNING = 0;
         public const int HEALTH = 1;
         public const int ENERGY = 2;
         public const int OXYGEN = 3;
-        public const int INVENTORY = 4;
-        public const int BROADCASTING = 5;
-        public const int DAMPENERS = 6;
-        public const int OXYGEN_ENV = 7;
+        public const int OXYGEN_ENV = 4;
+        public const int INVENTORY = 5;
+        public const int BROADCASTING = 6;
+        public const int DAMPENERS = 7;
         public const int GRAVITY = 8;
     };
     
@@ -43,6 +60,7 @@ namespace Digi.Helmet
         public bool enabled = true;
         public string helmetModel = "vignette";
         public bool hud = true;
+        public bool glass = true;
         public bool autoFovScale = false;
         public double scale = 0.0f;
         public double hudScale = 0.0f;
@@ -50,17 +68,21 @@ namespace Digi.Helmet
         public float warnBlinkTime = 0.25f;
         public float delayedRotation = 0.5f;
         
-        //public string[] helmetModels = new string[] { "off", "vignette", "helmetmesh" };
+        public const int TOTAL_ELEMENTS = 9; // NOTE: update Icons class when updating these
+        public HudElement[] elements = new HudElement[TOTAL_ELEMENTS]
+        {
+            new HudElement("warning") { posLeft = 0, posUp = 0.035, },
+            new HudElement("health") { posLeft = 0.085, posUp = -0.062, hasBar = true, warnPercent = 15, },
+            new HudElement("energy") { posLeft = -0.075, posUp = -0.07, hasBar = true, warnPercent = 15, flipHorizontal = true, },
+            new HudElement("oxygen") { posLeft = 0.075, posUp = -0.07, hasBar = true, warnPercent = 15, },
+            new HudElement("oxygenenv") { posLeft = 0.075, posUp = -0.07, },
+            new HudElement("inventory") { posLeft = -0.085, posUp = -0.062, hasBar = true, flipHorizontal = true, },
+            new HudElement("broadcasting") { posLeft = 0.082, posUp = -0.077, },
+            new HudElement("dampeners") { posLeft = 0.074, posUp = -0.076, },
+            new HudElement("gravity") { posLeft = 0, posUp = -0.06, },
+        };
         
-        public const int TOTAL_ICONS = 9;
-        public string[] iconNames = new string[TOTAL_ICONS] { "warning", "health", "energy", "oxygen", "inventory", "broadcasting", "dampeners", "oxygenenv", "gravity"};
-        public bool[] iconBar = new bool[TOTAL_ICONS] { false, true, true, true, true, false, false, false, false };
-        public bool[] iconShow = new bool[TOTAL_ICONS] { true, true, true, true, true, true, true, true, true };
-        public double[] iconLeft = new double[TOTAL_ICONS] { 0, 0.085, -0.075, 0.075, -0.085, 0.082, 0.074, 0.075, 0.0 };
-        public double[] iconUp = new double[TOTAL_ICONS] { 0.035, -0.062, -0.07, -0.07, -0.062, -0.077, -0.076, -0.07, -0.06 };
-        public bool[] iconFlipVertical = new bool[TOTAL_ICONS] { false, false, true, false, true, false, false, false, false };
-        public int[] iconWarnPercent = new int[TOTAL_ICONS] { -1, 15, 15, 15, -1, -1, -1, -1, -1 };
-        public bool[] iconNoHud = new bool[TOTAL_ICONS] { false, false, true, false, false, false, false, false, false };
+        //public string[] helmetModels = new string[] { "off", "vignette", "helmetmesh" };
         
         public const double MIN_SCALE = -1.0f;
         public const double MAX_SCALE = 1.0f;
@@ -75,12 +97,14 @@ namespace Digi.Helmet
         
         public Settings()
         {
+            // load the settings if they exist
             if(!Load())
             {
+                // if not, automatically set the scale according to player's FOV
                 ScaleForFOV(MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView));
             }
             
-            Save();
+            Save(); // refresh config in case of any missing or extra settings
         }
         
         public bool Load()
@@ -146,31 +170,33 @@ namespace Digi.Helmet
                         {
                             case "up":
                                 if(double.TryParse(args[1], out d))
-                                    iconUp[currentId] = d;
+                                    elements[currentId].posUp = d;
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
                             case "left":
                                 if(double.TryParse(args[1], out d))
-                                    iconLeft[currentId] = d;
+                                    elements[currentId].posLeft = d;
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
-                            case "flipvertical":
+                                /*
+                            case "fliphorizontal":
                                 if(bool.TryParse(args[1], out b))
-                                    iconFlipVertical[currentId] = b;
+                                    elements[currentId].flipHorizontal = b;
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
+                                 */
                             case "warnpercent":
                                 if(int.TryParse(args[1], out i))
-                                    iconWarnPercent[currentId] = i;
+                                    elements[currentId].warnPercent = i;
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
-                            case "nohud":
-                                if(bool.TryParse(args[1], out b))
-                                    iconNoHud[currentId] = b;
+                            case "hudmode":
+                                if(int.TryParse(args[1], out i))
+                                    elements[currentId].hudMode = i;
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
@@ -213,6 +239,12 @@ namespace Digi.Helmet
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
+                            case "glass":
+                                if(bool.TryParse(args[1], out b))
+                                    glass = b;
+                                else
+                                    Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                continue;
                             case "autofovscale":
                                 if(bool.TryParse(args[1], out b))
                                     autoFovScale = b;
@@ -251,15 +283,15 @@ namespace Digi.Helmet
                                 continue;
                         }
                         
-                        for(int id = 0; id < TOTAL_ICONS; id++)
+                        for(int id = 0; id < TOTAL_ELEMENTS; id++)
                         {
-                            if(args[0] == iconNames[id])
+                            if(args[0] == elements[id].name)
                             {
                                 currentId = id;
                                 lookForIndentation = true;
                                 
                                 if(bool.TryParse(args[1], out b))
-                                    iconShow[currentId] = b;
+                                    elements[currentId].show = b;
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 
@@ -271,7 +303,7 @@ namespace Digi.Helmet
                             continue;
                     }
                     
-                    Log.Error("Unknown setting: " + args[0]);
+                    //Log.Error("Unknown setting: " + args[0]);
                 }
                 
                 Log.Info("Loaded settings:\n" + GetSettingsString(false));
@@ -326,6 +358,7 @@ namespace Digi.Helmet
             str.AppendLine("enabled="+enabled+(comments ? " // enable the mod ?" : ""));
             //str.AppendLine("helmetmodel="+helmetModel+(comments ? " // options: "+String.Join(", ", helmetModels) : ""));
             str.AppendLine("hud="+hud+(comments ? " // enable the HUD ?" : ""));
+            str.AppendLine("glass="+glass+(comments ? " // enable the reflective glass ?" : ""));
             str.AppendLine("autofovscale="+autoFovScale+(comments ? " // if true it automatically sets 'scale' and 'hudscale' when changing FOV" : ""));
             str.AppendLine("scale="+scale+(comments ? " // the helmet glass scale, -1.0 to 1.0, default 0 for FOV 60" : ""));
             str.AppendLine("hudscale="+hudScale+(comments ? " // the entire HUD scale, -1.0 to 1.0, default 0 for FOV 60" : ""));
@@ -339,15 +372,17 @@ namespace Digi.Helmet
                 str.AppendLine("// Use /helmet reload in-game to reload the config after you've edited it.");
             }
             
-            for(int id = 0; id < TOTAL_ICONS; id++)
+            for(int id = 0; id < TOTAL_ELEMENTS; id++)
             {
-                str.AppendLine(iconNames[id]+"="+iconShow[id]+(comments ? " // display this icon or not" : ""));
-                str.AppendLine("  up="+iconUp[id]+(comments ? " // position from the center towards up, use negative values for down" : ""));
-                str.AppendLine("  left="+iconLeft[id]+(comments ? " // position from the center towards left, use negative values for right" : ""));
-                str.AppendLine("  nohud="+iconNoHud[id]+(comments ? " // if true this icon will only appear when the game HUD is hidden" : ""));
+                var element = elements[id];
                 
-                if(iconWarnPercent.Length > id && iconWarnPercent[id] > -1)
-                    str.AppendLine("  warnpercent="+iconWarnPercent[id]+(comments ? " // warning % for this statistic" : ""));
+                str.AppendLine(element.name+"="+element.show+(comments ? " // display this icon or not" : ""));
+                str.AppendLine("  up="+element.posUp+(comments ? " // position from the center towards up, use negative values for down" : ""));
+                str.AppendLine("  left="+element.posLeft+(comments ? " // position from the center towards left, use negative values for right" : ""));
+                str.AppendLine("  hudmode="+element.hudMode+(comments ? " // shows/hides icon depending on the vanilla HUD's state: 0 = any, 1 = only when hidden, 2 = only when visible" : ""));
+                
+                if(element.warnPercent > -1)
+                    str.AppendLine("  warnpercent="+element.warnPercent+(comments ? " // warning % for this statistic" : ""));
             }
             
             if(comments)

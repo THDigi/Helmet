@@ -13,7 +13,27 @@
       <BlockTopology>TriangleMesh</BlockTopology>
       <Size x="1" y="1" z="1" />
       <ModelOffset x="0" y="0" z="0" />
-      <Model>Models\Helmet_Vignette.mwm</Model>
+      <Model>Models\Vignette.mwm</Model>
+      <Components>
+        <Component Subtype="SteelPlate" Count="1" />
+      </Components>
+      <CriticalComponent Subtype="SteelPlate" Index="0" />
+      <EdgeType>Light</EdgeType>
+      <BuildTimeSeconds>999999</BuildTimeSeconds>
+      <Public>false</Public>
+    </Definition>
+    <Definition>
+      <Id>
+        <TypeId>TerminalBlock</TypeId>
+        <SubtypeId>Helmet_vignetteNoReflection</SubtypeId>
+      </Id>
+      <DisplayName>Helmet_vignetteNoReflection</DisplayName>
+      <Icon>Textures\FAKE.dds</Icon>
+      <CubeSize>Small</CubeSize>
+      <BlockTopology>TriangleMesh</BlockTopology>
+      <Size x="1" y="1" z="1" />
+      <ModelOffset x="0" y="0" z="0" />
+      <Model>Models\Vignette_NoReflection.mwm</Model>
       <Components>
         <Component Subtype="SteelPlate" Count="1" />
       </Components>
@@ -26,9 +46,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_Health</SubtypeId>
+        <SubtypeId>HelmetHUD_health</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_Health</DisplayName>
+      <DisplayName>HelmetHUD_health</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -47,9 +67,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_HealthBar</SubtypeId>
+        <SubtypeId>HelmetHUD_healthBar</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_HealthBar</DisplayName>
+      <DisplayName>HelmetHUD_healthBar</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -68,9 +88,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_Energy</SubtypeId>
+        <SubtypeId>HelmetHUD_energy</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_Energy</DisplayName>
+      <DisplayName>HelmetHUD_energy</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -89,9 +109,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_EnergyBar</SubtypeId>
+        <SubtypeId>HelmetHUD_energyBar</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_EnergyBar</DisplayName>
+      <DisplayName>HelmetHUD_energyBar</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -110,9 +130,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_Oxygen</SubtypeId>
+        <SubtypeId>HelmetHUD_oxygen</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_Oxygen</DisplayName>
+      <DisplayName>HelmetHUD_oxygen</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -131,9 +151,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_OxygenBar</SubtypeId>
+        <SubtypeId>HelmetHUD_oxygenBar</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_OxygenBar</DisplayName>
+      <DisplayName>HelmetHUD_oxygenBar</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -152,9 +172,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_Oxygenenv0</SubtypeId>
+        <SubtypeId>HelmetHUD_oxygenenv0</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_Oxygenenv0</DisplayName>
+      <DisplayName>HelmetHUD_oxygenenv0</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -172,9 +192,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_Oxygenenv1</SubtypeId>
+        <SubtypeId>HelmetHUD_oxygenenv1</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_Oxygenenv1</DisplayName>
+      <DisplayName>HelmetHUD_oxygenenv1</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -192,9 +212,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_Oxygenenv2</SubtypeId>
+        <SubtypeId>HelmetHUD_oxygenenv2</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_Oxygenenv2</DisplayName>
+      <DisplayName>HelmetHUD_oxygenenv2</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -213,9 +233,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_Inventory</SubtypeId>
+        <SubtypeId>HelmetHUD_inventory</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_Inventory</DisplayName>
+      <DisplayName>HelmetHUD_inventory</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -234,9 +254,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_InventoryBar</SubtypeId>
+        <SubtypeId>HelmetHUD_inventoryBar</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_InventoryBar</DisplayName>
+      <DisplayName>HelmetHUD_inventoryBar</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -254,9 +274,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_Broadcasting</SubtypeId>
+        <SubtypeId>HelmetHUD_broadcasting</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_Broadcasting</DisplayName>
+      <DisplayName>HelmetHUD_broadcasting</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -275,9 +295,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_Dampeners</SubtypeId>
+        <SubtypeId>HelmetHUD_dampeners</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_Dampeners</DisplayName>
+      <DisplayName>HelmetHUD_dampeners</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -296,9 +316,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_Warning</SubtypeId>
+        <SubtypeId>HelmetHUD_warning</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_Warning</DisplayName>
+      <DisplayName>HelmetHUD_warning</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -317,9 +337,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_GravityDir</SubtypeId>
+        <SubtypeId>HelmetHUD_gravityDir</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_GravityDir</DisplayName>
+      <DisplayName>HelmetHUD_gravityDir</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
@@ -337,9 +357,9 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_GravityNone</SubtypeId>
+        <SubtypeId>HelmetHUD_gravityNone</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_GravityNone</DisplayName>
+      <DisplayName>HelmetHUD_gravityNone</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
