@@ -25,6 +25,8 @@ using VRage.Utils;
 using Digi.Utils;
 using Digi.Helmet;
 
+using IMyCockpit = Sandbox.ModAPI.Ingame.IMyCockpit;
+using IMyShipController = Sandbox.ModAPI.Ingame.IMyShipController;
 using IMyDestroyableObject = Sandbox.ModAPI.Interfaces.IMyDestroyableObject;
 using IMyGravityGenerator = Sandbox.ModAPI.Ingame.IMyGravityGenerator;
 using IMyGravityGeneratorBase = Sandbox.ModAPI.Ingame.IMyGravityGeneratorBase;
@@ -165,8 +167,9 @@ namespace Digi.Helmet
             
             if(characterEntity != null && settings.autoFovScale)
             {
-                if(++slowUpdateFov % 60 == 0)
+                if(++slowUpdateFov >= 60)
                 {
+                    slowUpdateFov = 0;
                     float fov = MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView);
                     
                     if(oldFov != fov)
@@ -176,39 +179,30 @@ namespace Digi.Helmet
                         
                         oldFov = fov;
                     }
-                    
-                    slowUpdateFov = 0;
                 }
             }
             
-            if(MyAPIGateway.Session.Player != null
-               && MyAPIGateway.Session.Player.Controller != null
-               && MyAPIGateway.Session.Player.Controller.ControlledEntity != null
-               && MyAPIGateway.Session.Player.Controller.ControlledEntity.Entity != null
-               && MyAPIGateway.Session.CameraController != null
-               && MyAPIGateway.Session.CameraController.IsInFirstPersonView)
+            var camera = MyAPIGateway.Session.CameraController;
+            
+            if(camera != null && camera.IsInFirstPersonView && MyAPIGateway.Session.ControlledObject != null && MyAPIGateway.Session.ControlledObject.Entity != null)
             {
-                var controlled = MyAPIGateway.Session.Player.Controller.ControlledEntity.Entity;
+                var contrEnt = MyAPIGateway.Session.ControlledObject.Entity;
                 
-                if(MyAPIGateway.Session.CameraController == controlled)
+                if(camera is IMyCharacter || (camera == contrEnt && contrEnt is IMyCockpit))
                 {
-                    if(controlled is IMyCharacter)
+                    if(camera is IMyCharacter)
                     {
-                        characterEntity = controlled;
-                        
-                        switch(AttachHelmet(characterEntity))
-                        {
-                            case 2:
-                                return;
-                        }
-                        
-                        lastState = false;
+                        characterEntity = camera as IMyEntity;
                     }
-                    else if(lastState && (controlled is Sandbox.ModAPI.Ingame.IMyShipController))
+                    else if(contrEnt is IMyCharacter)
                     {
-                        if(characterEntity == null && controlled.Hierarchy.Children.Count > 0)
+                        characterEntity = contrEnt;
+                    }
+                    else if(contrEnt is IMyCockpit)
+                    {
+                        if(characterEntity == null && contrEnt.Hierarchy.Children.Count > 0)
                         {
-                            foreach(var child in controlled.Hierarchy.Children)
+                            foreach(var child in contrEnt.Hierarchy.Children)
                             {
                                 if(child.Entity is IMyCharacter && child.Entity.DisplayName == MyAPIGateway.Session.Player.DisplayName)
                                 {
@@ -217,24 +211,11 @@ namespace Digi.Helmet
                                 }
                             }
                         }
-                        
-                        if(characterEntity != null)
-                        {
-                            switch(AttachHelmet(characterEntity))
-                            {
-                                case 2:
-                                    return;
-                                case 1:
-                                    RemoveHelmet();
-                                    return;
-                            }
-                        }
-                        
-                        if(controlled is Sandbox.ModAPI.Ingame.IMyCockpit)
-                        {
-                            UpdateHelmetAt(MyAPIGateway.Session.ControlledObject.GetHeadMatrix(true, true));
-                            return;
-                        }
+                    }
+                    
+                    if(AttachHelmet())
+                    {
+                        return;
                     }
                 }
             }
@@ -242,41 +223,19 @@ namespace Digi.Helmet
             RemoveHelmet();
         }
         
-        private int AttachHelmet(IMyEntity charEnt)
+        private bool AttachHelmet()
         {
-            if(charEnt is IMyControllableEntity)
+            var controllable = characterEntity as IMyControllableEntity;
+            
+            if(controllable != null && controllable.EnabledHelmet)
             {
-                var contrEnt = charEnt as IMyControllableEntity;
-                
-                if(contrEnt.EnabledHelmet)
-                {
-                    UpdateHelmetAt(MyAPIGateway.Session.ControlledObject.GetHeadMatrix(true, true));
-                    return 2;
-                }
-                
-                return 1;
+                // ignoring head Y axis on foot because of an issue with ALT and 3rd person camera bumping into the ground
+                bool inCockpit = (MyAPIGateway.Session.ControlledObject.Entity is IMyCockpit);
+                UpdateHelmetAt(MyAPIGateway.Session.ControlledObject.GetHeadMatrix(inCockpit, true));
+                return true;
             }
             
-            return 0;
-            
-            /*
-            var character = charEnt.GetObjectBuilder(false) as MyObjectBuilder_Character;
-            
-            if(character != null && character.CharacterModel != null)
-            {
-                MyCharacterDefinition def;
-                
-                if(MyDefinitionManager.Static.Characters.TryGetValue(character.CharacterModel, out def) ? !def.NeedsOxygen : !character.CharacterModel.EndsWith("_no_helmet"))
-                {
-                    UpdateHelmetAt(MyAPIGateway.Session.ControlledObject.GetHeadMatrix(true, true), character);
-                    return 2;
-                }
-                
-                return 1;
-            }
-            
-            return 0;
-             */
+            return false;
         }
         
         private void RemoveHelmet()
@@ -318,6 +277,9 @@ namespace Digi.Helmet
             }
         }
         
+        double lastLinearSpeed;
+        Vector3D lastDirSpeed;
+        
         private void UpdateHelmetAt(MatrixD matrix)
         {
             try
@@ -351,11 +313,51 @@ namespace Digi.Helmet
                 // No smoothing when in a cockpit/seat since it already is smoothed
                 if(!(MyAPIGateway.Session.Player.Controller.ControlledEntity.Entity is Sandbox.ModAPI.Ingame.IMyCockpit))
                 {
+                    /*
                     pos = matrix.Translation;
                     temp = MatrixD.Lerp(lastMatrix, matrix, (1.0f - settings.delayedRotation));
                     lastMatrix = matrix;
                     matrix = temp;
                     matrix.Translation = pos;
+                     */
+                    
+                    double lenDiff = Math.Abs((lastMatrix.Forward - matrix.Forward).Length()) * 4 * settings.delayedRotation;
+                    double amount = Math.Min(Math.Max(lenDiff, 0.25), 1.0);
+                    
+                    double linearSpeed = (lastMatrix.Translation - matrix.Translation).Length();
+                    double linearAccel = lastLinearSpeed - linearSpeed;
+                    
+                    Vector3D dirSpeed = (lastMatrix.Translation - matrix.Translation);
+                    Vector3D dirAccel = (lastDirSpeed - dirSpeed);
+                    
+                    double accel = dirAccel.Length();
+                    
+                    lastDirSpeed = dirSpeed;
+                    lastLinearSpeed = linearSpeed;
+                    
+                    double minMax = 0.005;
+                    double posAmount = MathHelper.Clamp(accel / 10, 0.01, 1.0);
+                    
+                    matrix.M11 = lastMatrix.M11 + (matrix.M11 - lastMatrix.M11) * amount;
+                    matrix.M12 = lastMatrix.M12 + (matrix.M12 - lastMatrix.M12) * amount;
+                    matrix.M13 = lastMatrix.M13 + (matrix.M13 - lastMatrix.M13) * amount;
+                    matrix.M14 = lastMatrix.M14 + (matrix.M14 - lastMatrix.M14) * amount;
+                    matrix.M21 = lastMatrix.M21 + (matrix.M21 - lastMatrix.M21) * amount;
+                    matrix.M22 = lastMatrix.M22 + (matrix.M22 - lastMatrix.M22) * amount;
+                    matrix.M23 = lastMatrix.M23 + (matrix.M23 - lastMatrix.M23) * amount;
+                    matrix.M24 = lastMatrix.M24 + (matrix.M24 - lastMatrix.M24) * amount;
+                    matrix.M31 = lastMatrix.M31 + (matrix.M31 - lastMatrix.M31) * amount;
+                    matrix.M32 = lastMatrix.M32 + (matrix.M32 - lastMatrix.M32) * amount;
+                    matrix.M33 = lastMatrix.M33 + (matrix.M33 - lastMatrix.M33) * amount;
+                    matrix.M34 = lastMatrix.M34 + (matrix.M34 - lastMatrix.M34) * amount;
+                    
+                    matrix.M41 = matrix.M41 + MathHelper.Clamp((lastMatrix.M41 - matrix.M41) * posAmount, -minMax, minMax);
+                    matrix.M42 = matrix.M42 + MathHelper.Clamp((lastMatrix.M42 - matrix.M42) * posAmount, -minMax, minMax);
+                    matrix.M43 = matrix.M43 + MathHelper.Clamp((lastMatrix.M43 - matrix.M43) * posAmount, -minMax, minMax);
+                    
+                    matrix.M44 = lastMatrix.M44 + (matrix.M44 - lastMatrix.M44) * amount;
+                    
+                    lastMatrix = matrix;
                 }
                 
                 // Align the helmet mesh
@@ -908,7 +910,7 @@ namespace Digi.Helmet
             MyAPIGateway.Utilities.ShowMissionScreen("Helmet Mod Commands", "", "You can type these commands in the chat.", HELP_COMMANDS, null, "Close");
         }
     }
-    
+
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_CubeGrid))]
     public class Grid : MyGameLogicComponent
     {
@@ -967,7 +969,7 @@ namespace Digi.Helmet
             return copy ? (MyObjectBuilder_EntityBase)objectBuilder.Clone() : objectBuilder;
         }
     }
-    
+
     public static class Extensions
     {
         public static string ToUpperFirst(this string s)

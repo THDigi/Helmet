@@ -74,7 +74,7 @@
 	<IgnoreDepth>true</IgnoreDepth>
       <UseAtlas>false</UseAtlas>
 	<NeedSort>true</NeedSort>
-      <Emissivity>0.5</Emissivity>
+      <Emissivity>1.0</Emissivity>
 	<Reflectivity>0</Reflectivity>
       <UVOffset>
         <X>0</X>
@@ -85,10 +85,10 @@
         <Y>1</Y>
       </UVSize>
 	<Color>
-        <X>0.75</X>
-        <Y>0.75</Y>
-	  <Z>0.75</Z>
-	  <W>0.01</W>
+        <X>1.0</X>
+        <Y>1.0</Y>
+	  <Z>1.0</Z>
+	  <W>0.3</W>
       </Color>
     </TransparentMaterial>
 
