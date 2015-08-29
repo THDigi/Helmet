@@ -48,7 +48,6 @@ namespace Digi.Helmet
         private IMyEntity characterEntity = null;
         private bool removedHelmet = false;
         private bool removedHUD = false;
-        private bool lastState = true;
         private long lastReminder;
         private bool warningBlinkOn = true;
         private double lastWarningBlink = 0;
@@ -65,8 +64,8 @@ namespace Digi.Helmet
         private float[] values = new float[Settings.TOTAL_ELEMENTS];
         private bool[] show = new bool[Settings.TOTAL_ELEMENTS];
         private MatrixD lastMatrix;
-        private MatrixD temp;
-        private Vector3D pos;
+        //private MatrixD temp;
+        //private Vector3D pos;
         private int lastOxygenEnv = 0;
         private bool fatalError = false;
         
@@ -313,51 +312,54 @@ namespace Digi.Helmet
                 // No smoothing when in a cockpit/seat since it already is smoothed
                 if(!(MyAPIGateway.Session.Player.Controller.ControlledEntity.Entity is Sandbox.ModAPI.Ingame.IMyCockpit))
                 {
-                    /*
-                    pos = matrix.Translation;
-                    temp = MatrixD.Lerp(lastMatrix, matrix, (1.0f - settings.delayedRotation));
-                    lastMatrix = matrix;
-                    matrix = temp;
-                    matrix.Translation = pos;
-                     */
-                    
-                    double lenDiff = Math.Abs((lastMatrix.Forward - matrix.Forward).Length()) * 4 * settings.delayedRotation;
-                    double amount = Math.Min(Math.Max(lenDiff, 0.25), 1.0);
-                    
-                    double linearSpeed = (lastMatrix.Translation - matrix.Translation).Length();
-                    double linearAccel = lastLinearSpeed - linearSpeed;
-                    
-                    Vector3D dirSpeed = (lastMatrix.Translation - matrix.Translation);
-                    Vector3D dirAccel = (lastDirSpeed - dirSpeed);
-                    
-                    double accel = dirAccel.Length();
-                    
-                    lastDirSpeed = dirSpeed;
-                    lastLinearSpeed = linearSpeed;
-                    
-                    double minMax = 0.005;
-                    double posAmount = MathHelper.Clamp(accel / 10, 0.01, 1.0);
-                    
-                    matrix.M11 = lastMatrix.M11 + (matrix.M11 - lastMatrix.M11) * amount;
-                    matrix.M12 = lastMatrix.M12 + (matrix.M12 - lastMatrix.M12) * amount;
-                    matrix.M13 = lastMatrix.M13 + (matrix.M13 - lastMatrix.M13) * amount;
-                    matrix.M14 = lastMatrix.M14 + (matrix.M14 - lastMatrix.M14) * amount;
-                    matrix.M21 = lastMatrix.M21 + (matrix.M21 - lastMatrix.M21) * amount;
-                    matrix.M22 = lastMatrix.M22 + (matrix.M22 - lastMatrix.M22) * amount;
-                    matrix.M23 = lastMatrix.M23 + (matrix.M23 - lastMatrix.M23) * amount;
-                    matrix.M24 = lastMatrix.M24 + (matrix.M24 - lastMatrix.M24) * amount;
-                    matrix.M31 = lastMatrix.M31 + (matrix.M31 - lastMatrix.M31) * amount;
-                    matrix.M32 = lastMatrix.M32 + (matrix.M32 - lastMatrix.M32) * amount;
-                    matrix.M33 = lastMatrix.M33 + (matrix.M33 - lastMatrix.M33) * amount;
-                    matrix.M34 = lastMatrix.M34 + (matrix.M34 - lastMatrix.M34) * amount;
-                    
-                    matrix.M41 = matrix.M41 + MathHelper.Clamp((lastMatrix.M41 - matrix.M41) * posAmount, -minMax, minMax);
-                    matrix.M42 = matrix.M42 + MathHelper.Clamp((lastMatrix.M42 - matrix.M42) * posAmount, -minMax, minMax);
-                    matrix.M43 = matrix.M43 + MathHelper.Clamp((lastMatrix.M43 - matrix.M43) * posAmount, -minMax, minMax);
-                    
-                    matrix.M44 = lastMatrix.M44 + (matrix.M44 - lastMatrix.M44) * amount;
-                    
-                    lastMatrix = matrix;
+                    if(settings.delayedRotation > 0)
+                    {
+                        /*
+                        pos = matrix.Translation;
+                        temp = MatrixD.Lerp(lastMatrix, matrix, (1.0f - settings.delayedRotation));
+                        lastMatrix = matrix;
+                        matrix = temp;
+                        matrix.Translation = pos;
+                         */
+                        
+                        double lenDiff = Math.Abs((lastMatrix.Forward - matrix.Forward).Length()) * 4 * settings.delayedRotation;
+                        double amount = Math.Min(Math.Max(lenDiff, 0.25), 1.0);
+                        
+                        double linearSpeed = (lastMatrix.Translation - matrix.Translation).Length();
+                        double linearAccel = lastLinearSpeed - linearSpeed;
+                        
+                        Vector3D dirSpeed = (lastMatrix.Translation - matrix.Translation);
+                        Vector3D dirAccel = (lastDirSpeed - dirSpeed);
+                        
+                        double accel = dirAccel.Length();
+                        
+                        lastDirSpeed = dirSpeed;
+                        lastLinearSpeed = linearSpeed;
+                        
+                        double minMax = 0.005;
+                        double posAmount = MathHelper.Clamp(accel / 10, 0.01, 1.0);
+                        
+                        matrix.M11 = lastMatrix.M11 + (matrix.M11 - lastMatrix.M11) * amount;
+                        matrix.M12 = lastMatrix.M12 + (matrix.M12 - lastMatrix.M12) * amount;
+                        matrix.M13 = lastMatrix.M13 + (matrix.M13 - lastMatrix.M13) * amount;
+                        matrix.M14 = lastMatrix.M14 + (matrix.M14 - lastMatrix.M14) * amount;
+                        matrix.M21 = lastMatrix.M21 + (matrix.M21 - lastMatrix.M21) * amount;
+                        matrix.M22 = lastMatrix.M22 + (matrix.M22 - lastMatrix.M22) * amount;
+                        matrix.M23 = lastMatrix.M23 + (matrix.M23 - lastMatrix.M23) * amount;
+                        matrix.M24 = lastMatrix.M24 + (matrix.M24 - lastMatrix.M24) * amount;
+                        matrix.M31 = lastMatrix.M31 + (matrix.M31 - lastMatrix.M31) * amount;
+                        matrix.M32 = lastMatrix.M32 + (matrix.M32 - lastMatrix.M32) * amount;
+                        matrix.M33 = lastMatrix.M33 + (matrix.M33 - lastMatrix.M33) * amount;
+                        matrix.M34 = lastMatrix.M34 + (matrix.M34 - lastMatrix.M34) * amount;
+                        
+                        matrix.M41 = matrix.M41 + MathHelper.Clamp((lastMatrix.M41 - matrix.M41) * posAmount, -minMax, minMax);
+                        matrix.M42 = matrix.M42 + MathHelper.Clamp((lastMatrix.M42 - matrix.M42) * posAmount, -minMax, minMax);
+                        matrix.M43 = matrix.M43 + MathHelper.Clamp((lastMatrix.M43 - matrix.M43) * posAmount, -minMax, minMax);
+                        
+                        matrix.M44 = lastMatrix.M44 + (matrix.M44 - lastMatrix.M44) * amount;
+                        
+                        lastMatrix = matrix;
+                    }
                 }
                 
                 // Align the helmet mesh
@@ -368,7 +370,6 @@ namespace Digi.Helmet
                     helmet.SetWorldMatrix(helmetMatrix);
                 
                 removedHelmet = false;
-                lastState = true;
                 
                 // if HUD is disabled or we can't get the info, remove the HUD (if exists) and stop here
                 if(!settings.hud || characterObject == null)
