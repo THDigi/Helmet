@@ -363,7 +363,7 @@ namespace Digi.Helmet
             str.AppendLine("scale="+scale+(comments ? " // the helmet glass scale, -1.0 to 1.0, default 0 for FOV 60" : ""));
             str.AppendLine("hudscale="+hudScale+(comments ? " // the entire HUD scale, -1.0 to 1.0, default 0 for FOV 60" : ""));
             str.AppendLine("warnblinktime="+warnBlinkTime+(comments ? " // the time between each hide/show of the warning icon and its respective bar" : ""));
-            str.AppendLine("delayedrotation="+delayedRotation+(comments ? " // 0.0 to 1.0, how much to delay the helmet when rotating view, 0 disables" : ""));
+            str.AppendLine("delayedrotation="+delayedRotation+(comments ? " // 0.0 to 1.0, how much to delay the helmet when rotating view, 0 disables it" : ""));
             
             if(comments)
             {
