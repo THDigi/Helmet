@@ -1,0 +1,92 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+                /*
+                var cam = MyAPIGateway.Session.Camera;
+                double scale = settings.scale;
+                double hudScale = settings.hudScale;
+                float zoomDeg = MathHelper.ToDegrees(cam.FovWithZoom);
+                
+                if(zoomDeg < cam.FieldOfViewAngle)
+                {
+                    double fovScale = ((zoomDeg - 60) / 30.0);
+                    
+                    if(fovScale > 0)
+                        fovScale *= 0.65;
+                    else if(fovScale < 0)
+                        fovScale *= 1.2;
+                    
+                    fovScale = Math.Round(fovScale, 2);
+                    scale = Math.Min(Math.Max(fovScale, Settings.MIN_SCALE), Settings.MAX_SCALE);
+                    hudScale = Math.Min(Math.Max(fovScale, Settings.MIN_HUDSCALE), Settings.MAX_HUDSCALE);
+                }
+                 */
+                
+
+
+
+
+
+
+
+
+
+
+
+
+                            if(battery < 50)
+                            {
+                                if(flickerResetBgColor > 0)
+                                {
+                                    if(flickerResetBgColor == 1)
+                                    {
+                                        lcd.SetValue<Color>("FontColor", new Color(151, 226, 255));
+                                        lcd.SetValue<Color>("BackgroundColor", new Color(1, 2, 3));
+                                    }
+                                    else
+                                    {
+                                        if(rand.Next(0, 2) == 0)
+                                        {
+                                            lcd.SetValue<Color>("FontColor", new Color(0, 0, 0));
+                                            lcd.SetValue<Color>("BackgroundColor", new Color(0, 0, 0));
+                                            //lcd.SetValue<Color>("BackgroundColor", new Color(1, 4, 5));
+                                        }
+                                        else
+                                        {
+                                            lcd.SetValue<Color>("FontColor", new Color(151, 226, 255));
+                                            lcd.SetValue<Color>("BackgroundColor", new Color(1, 4, 5));
+                                        }
+                                    }
+                                    
+                                    flickerResetBgColor--;
+                                }
+                                else
+                                {
+                                    if(flickerTimeOut > 0)
+                                    {
+                                        flickerTimeOut--;
+                                    }
+                                    else
+                                    {
+                                        if(rand.Next(0, (50 - Math.Max(battery, 10))) == 0)
+                                        {
+                                            flickerResetBgColor = 2 + rand.Next(0, 4);
+                                            lcd.SetValue<Color>("FontColor", new Color(0, 0, 0));
+                                            lcd.SetValue<Color>("BackgroundColor", new Color(0, 0, 0));
+                                            //lcd.SetValue<Color>("BackgroundColor", new Color(1, 4, 5));
+                                            
+                                            flickerTimeOut = 60 * rand.Next(3,11);
+                                        }
+                                    }
+                                }
+                            }

@@ -37,6 +37,9 @@
     <Reference Include="Sandbox.Game">
       <HintPath>D:\Steam\SteamApps\common\SpaceEngineers\Bin\Sandbox.Game.dll</HintPath>
     </Reference>
+    <Reference Include="Sandbox.Graphics">
+      <HintPath>D:\Steam\SteamApps\common\SpaceEngineers\Bin\Sandbox.Graphics.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
@@ -57,11 +60,16 @@
     <Reference Include="VRage.Math">
       <HintPath>D:\Steam\SteamApps\common\SpaceEngineers\Bin\VRage.Math.dll</HintPath>
     </Reference>
+    <Reference Include="VRage.Render11">
+      <HintPath>D:\Steam\SteamApps\common\SpaceEngineers\Bin\VRage.Render11.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Benchmark.cs" />
     <Compile Include="Helmet.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="Settings.cs" />
+    <Compile Include="Tools.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

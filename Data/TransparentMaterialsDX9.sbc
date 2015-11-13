@@ -5,7 +5,7 @@
     <TransparentMaterial>
       <Id>
         <TypeId>TransparentMaterialDefinition</TypeId>
-        <SubtypeId>HelmetVignette</SubtypeId>
+        <SubtypeId>DX9_HelmetVignette</SubtypeId>
       </Id>
       <Texture>Textures\Vignette.dds</Texture>
       <SoftParticleDistanceScale>1000</SoftParticleDistanceScale>
@@ -15,7 +15,7 @@
       <UseAtlas>false</UseAtlas>
 	<NeedSort>true</NeedSort>
       <Emissivity>0</Emissivity>
-	<Reflectivity>0.3</Reflectivity>
+	<Reflectivity>0.05</Reflectivity>
       <UVOffset>
         <X>0</X>
         <Y>0</Y>
@@ -28,14 +28,14 @@
         <X>1.0</X>
         <Y>1.0</Y>
 	  <Z>1.0</Z>
-	  <W>0.0075</W>
+	  <W>0.005</W>
       </Color>
     </TransparentMaterial>
 
     <TransparentMaterial>
       <Id>
         <TypeId>TransparentMaterialDefinition</TypeId>
-        <SubtypeId>HelmetVignette_NoReflection</SubtypeId>
+        <SubtypeId>DX9_HelmetVignette_NoReflection</SubtypeId>
       </Id>
       <Texture>Textures\Vignette.dds</Texture>
       <SoftParticleDistanceScale>1000</SoftParticleDistanceScale>
@@ -58,14 +58,44 @@
         <X>1.0</X>
         <Y>1.0</Y>
 	  <Z>1.0</Z>
-	  <W>0.0075</W>
+	  <W>0.005</W>
       </Color>
     </TransparentMaterial>
 
     <TransparentMaterial>
       <Id>
         <TypeId>TransparentMaterialDefinition</TypeId>
-        <SubtypeId>HelmetHUD</SubtypeId>
+        <SubtypeId>DX9_HelmetVignette_Broken</SubtypeId>
+      </Id>
+      <Texture>Textures\VignetteBroken.dds</Texture>
+      <SoftParticleDistanceScale>1000</SoftParticleDistanceScale>
+      <CanBeAffectedByOtherLights>false</CanBeAffectedByOtherLights>
+      <AlphaMistingEnable>false</AlphaMistingEnable>
+	<IgnoreDepth>false</IgnoreDepth>
+      <UseAtlas>false</UseAtlas>
+	<NeedSort>true</NeedSort>
+      <Emissivity>0</Emissivity>
+	<Reflectivity>0.05</Reflectivity>
+      <UVOffset>
+        <X>0</X>
+        <Y>0</Y>
+      </UVOffset>
+      <UVSize>
+        <X>1</X>
+        <Y>1</Y>
+      </UVSize>
+	<Color>
+        <X>1.0</X>
+        <Y>1.0</Y>
+	  <Z>1.0</Z>
+	  <W>0.005</W>
+      </Color>
+    </TransparentMaterial>
+
+    <TransparentMaterial>
+      <Id>
+        <TypeId>TransparentMaterialDefinition</TypeId>
+        <SubtypeId>DX9_HelmetHUD</SubtypeId>
       </Id>
       <Texture>Textures\HelmetHUD.dds</Texture>
       <SoftParticleDistanceScale>1000</SoftParticleDistanceScale>
@@ -85,10 +115,10 @@
         <Y>1</Y>
       </UVSize>
 	<Color>
-        <X>1.0</X>
-        <Y>1.0</Y>
-	  <Z>1.0</Z>
-	  <W>0.3</W>
+        <X>0.5</X>
+        <Y>0.5</Y>
+	  <Z>0.5</Z>
+	  <W>0.1</W>
       </Color>
     </TransparentMaterial>
 

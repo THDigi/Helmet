@@ -42,6 +42,26 @@
       <BuildTimeSeconds>999999</BuildTimeSeconds>
       <Public>false</Public>
     </Definition>
+    <Definition>
+      <Id>
+        <TypeId>TerminalBlock</TypeId>
+        <SubtypeId>Helmet_vignetteBroken</SubtypeId>
+      </Id>
+      <DisplayName>Helmet_vignetteBroken</DisplayName>
+      <Icon>Textures\FAKE.dds</Icon>
+      <CubeSize>Small</CubeSize>
+      <BlockTopology>TriangleMesh</BlockTopology>
+      <Size x="1" y="1" z="1" />
+      <ModelOffset x="0" y="0" z="0" />
+      <Model>Models\Vignette_Broken.mwm</Model>
+      <Components>
+        <Component Subtype="SteelPlate" Count="1" />
+      </Components>
+      <CriticalComponent Subtype="SteelPlate" Index="0" />
+      <EdgeType>Light</EdgeType>
+      <BuildTimeSeconds>999999</BuildTimeSeconds>
+      <Public>false</Public>
+    </Definition>
 
     <Definition>
       <Id>
@@ -221,6 +241,48 @@
       <Size x="1" y="1" z="1" />
       <ModelOffset x="0" y="0" z="0" />
       <Model>Models\OxygenEnv2.mwm</Model>
+      <Components>
+        <Component Subtype="SteelPlate" Count="1" />
+      </Components>
+      <CriticalComponent Subtype="SteelPlate" Index="0" />
+      <EdgeType>Light</EdgeType>
+      <BuildTimeSeconds>999999</BuildTimeSeconds>
+      <Public>false</Public>
+    </Definition>
+
+    <Definition>
+      <Id>
+        <TypeId>TerminalBlock</TypeId>
+        <SubtypeId>HelmetHUD_hydrogen</SubtypeId>
+      </Id>
+      <DisplayName>HelmetHUD_hydrogen</DisplayName>
+      <Icon>Textures\FAKE.dds</Icon>
+      <CubeSize>Small</CubeSize>
+      <BlockTopology>TriangleMesh</BlockTopology>
+      <Size x="1" y="1" z="1" />
+      <ModelOffset x="0" y="0" z="0" />
+      <Model>Models\Hydrogen.mwm</Model>
+      <Components>
+        <Component Subtype="SteelPlate" Count="1" />
+      </Components>
+      <CriticalComponent Subtype="SteelPlate" Index="0" />
+      <EdgeType>Light</EdgeType>
+      <BuildTimeSeconds>999999</BuildTimeSeconds>
+      <Public>false</Public>
+    </Definition>
+
+    <Definition>
+      <Id>
+        <TypeId>TerminalBlock</TypeId>
+        <SubtypeId>HelmetHUD_hydrogenBar</SubtypeId>
+      </Id>
+      <DisplayName>HelmetHUD_hydrogenBar</DisplayName>
+      <Icon>Textures\FAKE.dds</Icon>
+      <CubeSize>Small</CubeSize>
+      <BlockTopology>TriangleMesh</BlockTopology>
+      <Size x="1" y="1" z="1" />
+      <ModelOffset x="0" y="0" z="0" />
+      <Model>Models\HydrogenBar.mwm</Model>
       <Components>
         <Component Subtype="SteelPlate" Count="1" />
       </Components>

@@ -32,12 +32,40 @@ namespace Digi.Helmet
         public double posUp = 0;
         public bool flipHorizontal = false;
         public int warnPercent = -1;
+        public int warnMoveMode = 0;
         public int hudMode = 0;
         
         public HudElement(string name)
         {
             this.name = name;
         }
+        
+        public HudElement Copy()
+        {
+            return new HudElement(name)
+            {
+                show = this.show,
+                hasBar = this.hasBar,
+                posLeft = this.posLeft,
+                posUp = this.posUp,
+                flipHorizontal = this.flipHorizontal,
+                warnPercent = this.warnPercent,
+                warnMoveMode = this.warnMoveMode,
+                hudMode = this.hudMode,
+            };
+        }
+    }
+    
+    public enum Renderer
+    {
+        DX9 = 0,
+        DX11
+    }
+    
+    public enum SpeedUnits
+    {
+        mps,
+        kph,
     }
     
     public class Icons
@@ -47,10 +75,12 @@ namespace Digi.Helmet
         public const int ENERGY = 2;
         public const int OXYGEN = 3;
         public const int OXYGEN_ENV = 4;
-        public const int INVENTORY = 5;
-        public const int BROADCASTING = 6;
-        public const int DAMPENERS = 7;
-        public const int GRAVITY = 8;
+        public const int HYDROGEN = 5;
+        public const int INVENTORY = 6;
+        public const int BROADCASTING = 7;
+        public const int DAMPENERS = 8;
+        public const int GRAVITY = 9;
+        public const int DISPLAY = 10;
     };
     
     public class Settings
@@ -58,28 +88,39 @@ namespace Digi.Helmet
         private const string FILE = "helmet.cfg";
         
         public bool enabled = true;
+        public Renderer renderer = Renderer.DX9;
         public string helmetModel = "vignette";
         public bool hud = true;
         public bool glass = true;
         public bool autoFovScale = false;
         public double scale = 0.0f;
         public double hudScale = 0.0f;
-        public bool reminder = true;
         public float warnBlinkTime = 0.25f;
         public float delayedRotation = 0.5f;
+        public bool reminder = true;
         
-        public const int TOTAL_ELEMENTS = 9; // NOTE: update Icons class when updating these
-        public HudElement[] elements = new HudElement[TOTAL_ELEMENTS]
+        public int displayUpdateRate = 20;
+        public int displayQuality = 1;
+        public Color displayFontColor = new Color(151, 226, 255);
+        public Color displayBgColor = new Color(1, 2, 3);
+        public bool displayBorderSuitColor = true;
+        public SpeedUnits displaySpeedUnit = SpeedUnits.mps;
+        
+        public const int TOTAL_ELEMENTS = 11; // NOTE: update Icons class when updating these
+        public HudElement[] elements;
+        public HudElement[] defaultElements = new HudElement[TOTAL_ELEMENTS]
         {
             new HudElement("warning") { posLeft = 0, posUp = 0.035, },
             new HudElement("health") { posLeft = 0.085, posUp = -0.062, hasBar = true, warnPercent = 15, },
-            new HudElement("energy") { posLeft = -0.075, posUp = -0.07, hasBar = true, warnPercent = 15, flipHorizontal = true, },
-            new HudElement("oxygen") { posLeft = 0.075, posUp = -0.07, hasBar = true, warnPercent = 15, },
-            new HudElement("oxygenenv") { posLeft = 0.075, posUp = -0.07, },
-            new HudElement("inventory") { posLeft = -0.085, posUp = -0.062, hasBar = true, flipHorizontal = true, },
+            new HudElement("energy") { posLeft = -0.085, posUp = -0.058, hasBar = true, warnPercent = 15, flipHorizontal = true, },
+            new HudElement("oxygen") { posLeft = -0.08, posUp = -0.066, hasBar = true, warnPercent = 15, flipHorizontal = true, },
+            new HudElement("oxygenenv") { posLeft = -0.08, posUp = -0.066, },
+            new HudElement("hydrogen") { posLeft = -0.075, posUp = -0.074, hasBar = true, warnPercent = 15, warnMoveMode = 2, flipHorizontal = true, },
+            new HudElement("inventory") { posLeft = 0.075, posUp = -0.07, hasBar = true, },
             new HudElement("broadcasting") { posLeft = 0.082, posUp = -0.077, },
             new HudElement("dampeners") { posLeft = 0.074, posUp = -0.076, },
-            new HudElement("gravity") { posLeft = 0, posUp = -0.06, },
+            new HudElement("gravity") { posLeft = 0, posUp = -0.048, },
+            new HudElement("display") { posLeft = 0, posUp = -0.07, hudMode = 2, }
         };
         
         //public string[] helmetModels = new string[] { "off", "vignette", "helmetmesh" };
@@ -93,18 +134,42 @@ namespace Digi.Helmet
         public const float MIN_DELAYED = 0.0f;
         public const float MAX_DELAYED = 1.0f;
         
+        public const int MIN_DISPLAYUPDATE = 1;
+        public const int MAX_DISPLAYUPDATE = 60;
+        
+        public const string DX9_PREFIX = "DX9_";
+        
         private static char[] CHARS = new char[] { '=' };
+        
+        public bool hydrogenUpdateReset = true; // TODO remove after some time
         
         public Settings()
         {
+            ResetHUDElements();
+            
             // load the settings if they exist
             if(!Load())
             {
                 // if not, automatically set the scale according to player's FOV
                 ScaleForFOV(MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView));
             }
+            else if(hydrogenUpdateReset)
+            {
+                ResetHUDElements();
+                Log.Info("HUD elements in config were reset due to a redesign, everything else is untouched");
+            }
             
             Save(); // refresh config in case of any missing or extra settings
+        }
+        
+        public void ResetHUDElements()
+        {
+            elements = new HudElement[TOTAL_ELEMENTS];
+            
+            for(int i = 0; i < TOTAL_ELEMENTS; i++)
+            {
+                elements[i] = defaultElements[i].Copy();
+            }
         }
         
         public bool Load()
@@ -137,6 +202,10 @@ namespace Digi.Helmet
                 bool b;
                 float f;
                 double d;
+                Renderer r;
+                SpeedUnits u;
+                string[] rgb;
+                byte red,green,blue;
                 bool lookForIndentation = false;
                 int currentId = -1;
                 
@@ -194,12 +263,62 @@ namespace Digi.Helmet
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
+                            case "warnmovemode":
+                                if(int.TryParse(args[1], out i))
+                                    elements[currentId].warnMoveMode = i;
+                                else
+                                    Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                continue;
                             case "hudmode":
                                 if(int.TryParse(args[1], out i))
                                     elements[currentId].hudMode = i;
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
+                        }
+                        
+                        if(currentId == Icons.DISPLAY)
+                        {
+                            switch(args[0])
+                            {
+                                case "update":
+                                    if(int.TryParse(args[1], out i))
+                                        displayUpdateRate = Math.Min(Math.Max(i, MIN_DISPLAYUPDATE), MAX_DISPLAYUPDATE);
+                                    else
+                                        Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                    continue;
+                                case "quality":
+                                    if(int.TryParse(args[1], out i))
+                                        displayQuality = MathHelper.Clamp(i, 0, 1);
+                                    else
+                                        Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                    continue;
+                                case "bordersuitcolor":
+                                    if(bool.TryParse(args[1], out b))
+                                        displayBorderSuitColor = b;
+                                    else
+                                        Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                    continue;
+                                case "speedunit":
+                                    if(Enum.TryParse<SpeedUnits>(args[1].ToUpper(), out u))
+                                        displaySpeedUnit = u;
+                                    else
+                                        Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                    continue;
+                                case "fontcolor":
+                                case "bgcolor":
+                                    rgb = args[1].Split(',');
+                                    if(rgb.Length >= 3 && byte.TryParse(rgb[0].Trim(), out red) && byte.TryParse(rgb[1].Trim(), out green) && byte.TryParse(rgb[2].Trim(), out blue))
+                                    {
+                                        if(args[0] == "fontcolor")
+                                            displayFontColor = new Color(red, green, blue);
+                                        else
+                                            displayBgColor = new Color(red, green, blue);
+                                        continue;
+                                    }
+                                    Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                    continue;
+                            }
                         }
                     }
                     else
@@ -213,6 +332,12 @@ namespace Digi.Helmet
                             case "enabled":
                                 if(bool.TryParse(args[1], out b))
                                     enabled = b;
+                                else
+                                    Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                continue;
+                            case "renderer":
+                                if(Enum.TryParse<Renderer>(args[1].ToUpper(), out r))
+                                    renderer = r;
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
@@ -269,15 +394,15 @@ namespace Digi.Helmet
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
-                            case "reminder":
-                                if(bool.TryParse(args[1], out b))
-                                    reminder = b;
-                                else
-                                    Log.Error("Invalid "+args[0]+" value: " + args[1]);
-                                continue;
                             case "delayedrotation":
                                 if(float.TryParse(args[1], out f))
                                     delayedRotation = Math.Min(Math.Max(f, MIN_DELAYED), MAX_DELAYED);
+                                else
+                                    Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                continue;
+                            case "reminder":
+                                if(bool.TryParse(args[1], out b))
+                                    reminder = b;
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
@@ -287,6 +412,9 @@ namespace Digi.Helmet
                         {
                             if(args[0] == elements[id].name)
                             {
+                                if(id == Icons.HYDROGEN)
+                                    hydrogenUpdateReset = false;
+                                
                                 currentId = id;
                                 lookForIndentation = true;
                                 
@@ -355,15 +483,16 @@ namespace Digi.Helmet
                 str.AppendLine();
             }
             
-            str.AppendLine("enabled="+enabled+(comments ? " // enable the mod ?" : ""));
+            str.Append("enabled=").Append(enabled).AppendLine(comments ? " // enable the mod ?" : "");
             //str.AppendLine("helmetmodel="+helmetModel+(comments ? " // options: "+String.Join(", ", helmetModels) : ""));
-            str.AppendLine("hud="+hud+(comments ? " // enable the HUD ?" : ""));
-            str.AppendLine("glass="+glass+(comments ? " // enable the reflective glass ?" : ""));
-            str.AppendLine("autofovscale="+autoFovScale+(comments ? " // if true it automatically sets 'scale' and 'hudscale' when changing FOV" : ""));
-            str.AppendLine("scale="+scale+(comments ? " // the helmet glass scale, -1.0 to 1.0, default 0 for FOV 60" : ""));
-            str.AppendLine("hudscale="+hudScale+(comments ? " // the entire HUD scale, -1.0 to 1.0, default 0 for FOV 60" : ""));
-            str.AppendLine("warnblinktime="+warnBlinkTime+(comments ? " // the time between each hide/show of the warning icon and its respective bar" : ""));
-            str.AppendLine("delayedrotation="+delayedRotation+(comments ? " // 0.0 to 1.0, how much to delay the helmet when rotating view, 0 disables it" : ""));
+            str.Append("renderer=").Append(renderer).AppendLine(comments ? " // renderer used in-game, options: "+String.Join(", ", Enum.GetNames(typeof(Renderer))) : "");
+            str.Append("hud=").Append(hud).AppendLine(comments ? " // enable the HUD ?" : "");
+            str.Append("glass=").Append(glass).AppendLine(comments ? " // enable the reflective glass ?" : "");
+            str.Append("autofovscale=").Append(autoFovScale).AppendLine(comments ? " // if true it automatically sets 'scale' and 'hudscale' when changing FOV" : "");
+            str.Append("scale=").Append(scale).AppendLine(comments ? " // the helmet glass scale, -1.0 to 1.0, default 0 for FOV 60" : "");
+            str.Append("hudscale=").Append(hudScale).AppendLine(comments ? " // the entire HUD scale, -1.0 to 1.0, default 0 for FOV 60" : "");
+            str.Append("warnblinktime=").Append(warnBlinkTime).AppendLine(comments ? " // the time between each hide/show of the warning icon and its respective bar" : "");
+            str.Append("delayedrotation=").Append(delayedRotation).AppendLine(comments ? " // 0.0 to 1.0, how much to delay the helmet when rotating view, 0 disables it" : "");
             
             if(comments)
             {
@@ -376,13 +505,26 @@ namespace Digi.Helmet
             {
                 var element = elements[id];
                 
-                str.AppendLine(element.name+"="+element.show+(comments ? " // display this icon or not" : ""));
-                str.AppendLine("  up="+element.posUp+(comments ? " // position from the center towards up, use negative values for down" : ""));
-                str.AppendLine("  left="+element.posLeft+(comments ? " // position from the center towards left, use negative values for right" : ""));
-                str.AppendLine("  hudmode="+element.hudMode+(comments ? " // shows/hides icon depending on the vanilla HUD's state: 0 = any, 1 = only when hidden, 2 = only when visible" : ""));
+                str.Append(element.name).Append("=").Append(element.show).AppendLine(comments ? " // display this icon or not" : "");
+                str.Append("  up=").Append(element.posUp).AppendLine(comments ? " // position from the center towards up, use negative values for down" : "");
+                str.Append("  left=").Append(element.posLeft).AppendLine(comments ? " // position from the center towards left, use negative values for right" : "");
+                str.Append("  hudmode=").Append(element.hudMode).AppendLine(comments ? " // shows icon depending on the vanilla HUD's state: 0 = any, 1 = only when visible, 2 = only when hidden" : "");
+                
+                if(id == Icons.DISPLAY)
+                {
+                    str.Append("  updaterate=").Append(displayUpdateRate).AppendLine(comments ? " // updates per second, 1 to 60, default 20 (depends on simulation speed)" : "");
+                    str.Append("  quality=").Append(displayQuality).AppendLine(comments ? " // texture size and model detail, default 1 (512x512 with details), set to 0 for 256x256 without model details" : "");
+                    str.Append("  fontcolor=").Append(displayFontColor.R).Append(",").Append(displayFontColor.G).Append(",").Append(displayFontColor.B).AppendLine(comments ? " // text color in R,G,B format, default 151,226,255" : "");
+                    str.Append("  bgcolor=").Append(displayBgColor.R).Append(",").Append(displayBgColor.G).Append(",").Append(displayBgColor.B).AppendLine(comments ? " // background color in R,G,B format, default 1,2,3" : "");
+                    str.Append("  bordersuitcolor=").Append(displayBorderSuitColor).AppendLine(comments ? " // background color in R,G,B format, default 1,2,3" : "");
+                    str.Append("  speedunit=").Append(displaySpeedUnit).AppendLine(comments ? " // unit displayed for speed, options: "+String.Join(", ", Enum.GetNames(typeof(SpeedUnits))) : "");
+                }
                 
                 if(element.warnPercent > -1)
-                    str.AppendLine("  warnpercent="+element.warnPercent+(comments ? " // warning % for this statistic" : ""));
+                {
+                    str.Append("  warnpercent=").Append(element.warnPercent).AppendLine(comments ? " // warning % for this statistic" : "");
+                    str.Append("  warnmovemode=").Append(element.warnMoveMode).AppendLine(comments ? " // warning only shows in a mode: 0 = any, 1 = jetpack off, 2 = jetpack on" : "");
+                }
             }
             
             if(comments)
@@ -391,6 +533,16 @@ namespace Digi.Helmet
             str.AppendLine("reminder="+reminder+(comments ? " // do not change, this set to true will nag you to type /helmet until you do." : ""));
             
             return str.ToString();
+        }
+        
+        public string GetRenderPrefix()
+        {
+            return renderer == Renderer.DX9 ? DX9_PREFIX : "";
+        }
+        
+        public string GetHelmetModel()
+        {
+            return helmetModel + (glass ? "" : "NoReflection");
         }
         
         public void Close()
