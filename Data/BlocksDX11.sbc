@@ -399,15 +399,15 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_gravityDir</SubtypeId>
+        <SubtypeId>HelmetHUD_gravityNone</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_gravityDir</DisplayName>
+      <DisplayName>HelmetHUD_gravityNone</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
       <Size x="1" y="1" z="1" />
       <ModelOffset x="0" y="0" z="0" />
-      <Model>Models\GravityDir.mwm</Model>
+      <Model>Models\NoGravity.mwm</Model>
       <Components>
         <Component Subtype="SteelPlate" Count="1" />
       </Components>
@@ -419,15 +419,15 @@
     <Definition>
       <Id>
         <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>HelmetHUD_gravityNone</SubtypeId>
+        <SubtypeId>HelmetHUD_gravityDir</SubtypeId>
       </Id>
-      <DisplayName>HelmetHUD_gravityNone</DisplayName>
+      <DisplayName>HelmetHUD_gravityDir</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
       <Size x="1" y="1" z="1" />
       <ModelOffset x="0" y="0" z="0" />
-      <Model>Models\NoGravity.mwm</Model>
+      <Model>Models\GravityDir.mwm</Model>
       <Components>
         <Component Subtype="SteelPlate" Count="1" />
       </Components>

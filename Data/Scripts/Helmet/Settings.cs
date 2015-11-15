@@ -300,7 +300,7 @@ namespace Digi.Helmet
                                         Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                     continue;
                                 case "speedunit":
-                                    if(Enum.TryParse<SpeedUnits>(args[1].ToUpper(), out u))
+                                    if(Enum.TryParse<SpeedUnits>(args[1], out u))
                                         displaySpeedUnit = u;
                                     else
                                         Log.Error("Invalid "+args[0]+" value: " + args[1]);

@@ -9,6 +9,7 @@ using Sandbox.Common;
 using Sandbox.Common.Components;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Common.ObjectBuilders.VRageData;
+using Sandbox.Common.ObjectBuilders.Definitions;
 using Sandbox.Definitions;
 using Sandbox.Engine;
 using Sandbox.Engine.Physics;
@@ -54,14 +55,21 @@ namespace Digi.Helmet
         private long helmetBroken = 0;
         
         private float oldFov = 60;
-        private int slowUpdateFov = 0;
+        //private int slowUpdateFov = 0;
         
         public static List<IMyGravityGeneratorBase> gravityGenerators = new List<IMyGravityGeneratorBase>();
+        //private Vector3 artificialDir = Vector3.Zero;
+        //private Vector3 naturalDir = Vector3.Zero;
         private Vector3 gravityDir = Vector3.Zero;
-        private float gravityForce = 0;
+        private float artificialForce = 0;
+        private float naturalForce = 0;
         private int gravitySources = 0;
+        private float altitude = 0;
+        private float inventoryMass = 0;
         private bool prevGravityStatus = false;
-        private int slowUpdateGravDir = 0;
+        private const int SKIP_TICKS_GRAVITY = 6;
+        private const int SKIP_TICKS_FOV = 60;
+        private const int SKIP_TICKS_HUD = 5;
         
         private bool firstHelmetSpawn = true;
         private MatrixD helmetMatrix;
@@ -74,7 +82,9 @@ namespace Digi.Helmet
         private bool fatalError = false;
         
         //private MyObjectBuilder_Character characterObject;
-        private int slowUpdateCharObj = 0;
+        private short tick = 0;
+        
+        //private int slowUpdateCharObj = 0;
         
         public static IMyEntity holdingTool = null;
         public static string holdingToolTypeId = null;
@@ -104,15 +114,37 @@ namespace Digi.Helmet
         private StringBuilder str = new StringBuilder();
         private const string DISPLAY_PAD = " ";
         private const float DISPLAY_FONT_SIZE = 1.3f;
+        private const string NUMBER_FORMAT = "###,###,###";
+        private const string FLOAT_FORMAT = "###,###,###.##";
         
         //private int flickerResetBgColor = 0;
         //private int flickerTimeOut = 0;
+        
+        public Dictionary<long, MyPlanet> planets = new Dictionary<long, MyPlanet>();
+        private List<long> removePlanets = new List<long>();
+        //private int slowUpdatePlanets = 0;
+        private const int SKIP_TICKS_PLANETS = 60*3;
+        private static HashSet<IMyEntity> ents = new HashSet<IMyEntity>(); // this is always empty
         
         private Random rand = new Random();
         private Dictionary<string, int> components = new Dictionary<string, int>();
         private List<IMySlimBlock> blocks = new List<IMySlimBlock>();
         private StringBuilder tmp = new StringBuilder();
         private string lastDisplayText = null;
+        
+        private HashSet<MyStringHash> glassBreakCauses = new HashSet<MyStringHash>()
+        {
+            MyDamageType.Environment,
+            MyDamageType.Explosion,
+            MyDamageType.Bullet,
+            MyDamageType.Drill,
+            MyDamageType.Fall,
+            MyDamageType.Rocket,
+            MyDamageType.Weapon,
+            MyDamageType.Mine,
+            MyDamageType.Bolt,
+            MyDamageType.Squeez
+        };
         
         private const int HUD_BAR_MAX_SCALE = 376;
         private const float SCALE_DIST_ADJUST = 0.1f;
@@ -135,6 +167,7 @@ namespace Digi.Helmet
             "/helmet reload   re-loads the config file (for advanced editing)\n" +
             "/helmet <dx9/dx11>   change models for DX9 or DX11\n" +
             "/helmet glass <on/off>   turn glass reflections on or off\n" +
+            "/helmet lcd <on/off>   turns the LCD on or off\n" +
             "\n" +
             "For advanced editing go to:\n" +
             "%appdata%\\SpaceEngineers\\Storage\\428842256_Helmet\\helmet.cfg";
@@ -158,6 +191,11 @@ namespace Digi.Helmet
         protected override void UnloadData()
         {
             init = false;
+            ents.Clear();
+            planets.Clear();
+            gravityGenerators.Clear();
+            holdingTool = null;
+            
             MyAPIGateway.Utilities.MessageEntered -= MessageEntered;
             
             if(settings != null)
@@ -175,18 +213,9 @@ namespace Digi.Helmet
             {
                 var ent = obj as IMyEntity;
                 
-                if(ent.EntityId == characterEntity.EntityId)
+                if(ent.EntityId == characterEntity.EntityId && glassBreakCauses.Contains(info.Type))
                 {
-                    //MyAPIGateway.Utilities.ShowMessage("debug :", "killed by "+info.Type.String+"; damage="+info.Amount);
-                    
-                    switch(info.Type.String)
-                    {
-                        case "Environment":
-                        case "Explosion":
-                        case "Bullet":
-                            helmetBroken = ent.EntityId;
-                            break;
-                    }
+                    helmetBroken = ent.EntityId;
                 }
             }
         }
@@ -222,6 +251,8 @@ namespace Digi.Helmet
                 return;
             }
             
+            tick++; // global update tick
+            
             if(settings.reminder)
             {
                 long now = DateTime.UtcNow.Ticks;
@@ -241,9 +272,9 @@ namespace Digi.Helmet
                 }
                 else if(settings.autoFovScale)
                 {
-                    if(++slowUpdateFov >= 60)
+                    if(tick % SKIP_TICKS_FOV == 0)
                     {
-                        slowUpdateFov = 0;
+                        //slowUpdateFov = 0;
                         float fov = MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView);
                         
                         if(oldFov != fov)
@@ -488,9 +519,9 @@ namespace Digi.Helmet
                 
                 var c = MyHud.CharacterInfo;
                 
-                if(++slowUpdateCharObj % 5 == 0)
+                if(tick % SKIP_TICKS_HUD == 0)
                 {
-                    slowUpdateCharObj = 0;
+                    //slowUpdateCharObj = 0;
                     
                     // show and value cache for the HUD elements
                     for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
@@ -511,12 +542,16 @@ namespace Digi.Helmet
                     values[Icons.OXYGEN] = c.OxygenLevel * 100; // characterObject.OxygenLevel * 100;
                     values[Icons.OXYGEN_ENV] = (characterEntity as IMyCharacter).EnvironmentOxygenLevel * 2;
                     values[Icons.INVENTORY] = 0;
+                    inventoryMass = 0;
                     
                     // Get the inventory volume
                     MyInventory inv;
                     
                     if((characterEntity as MyEntity).TryGetInventory(out inv))
+                    {
                         values[Icons.INVENTORY] = ((float)inv.CurrentVolume / (float)inv.MaxVolume) * 100;
+                        inventoryMass = (float)inv.CurrentMass;
+                    }
                 }
                 
                 // Update the warning icon
@@ -549,20 +584,25 @@ namespace Digi.Helmet
                 
                 if(show[Icons.GRAVITY] || show[Icons.DISPLAY])
                 {
-                    if(++slowUpdateGravDir % 6 == 0)
+                    if(tick % SKIP_TICKS_PLANETS == 0)
                     {
-                        slowUpdateGravDir = 0;
-                        GetGravityAtPoint(characterEntity.WorldAABB.Center, ref gravityDir, ref gravityForce, ref gravitySources);
+                        MyAPIGateway.Entities.GetEntities(ents, delegate(IMyEntity e)
+                                                          {
+                                                              if(e is MyPlanet)
+                                                              {
+                                                                  if(!planets.ContainsKey(e.EntityId))
+                                                                      planets.Add(e.EntityId, e as MyPlanet);
+                                                              }
+                                                              
+                                                              return false; // no reason to add to the list
+                                                          });
+                    }
+                    
+                    if(tick % SKIP_TICKS_GRAVITY == 0)
+                    {
+                        CalculateGravityAndPlanetsAt(characterEntity.WorldAABB.Center);
                         
-                        bool inGravity = gravityForce > 0;
-                        
-                        if(inGravity)
-                        {
-                            float div = 1f / gravityForce;
-                            gravityDir.X *= div;
-                            gravityDir.Y *= div;
-                            gravityDir.Z *= div;
-                        }
+                        bool inGravity = gravitySources > 0;
                         
                         if(prevGravityStatus != inGravity)
                         {
@@ -677,7 +717,7 @@ namespace Digi.Helmet
                 // set the gravity icon type and update the gravity direction
                 if(id == Icons.GRAVITY)
                 {
-                    if(gravityDir == Vector3.Zero)
+                    if(gravitySources == 0)
                         name += "None";
                     else
                         name += "Dir";
@@ -709,7 +749,7 @@ namespace Digi.Helmet
                 matrix.Translation += (matrix.Left * element.posLeft) + (matrix.Up * element.posUp);
                 
                 // update the gravity indicator
-                if(id == Icons.GRAVITY && gravityDir != Vector3.Zero)
+                if(id == Icons.GRAVITY && gravitySources > 0)
                 {
                     matrix.Translation += matrix.Forward * 0.05;
                     
@@ -745,9 +785,9 @@ namespace Digi.Helmet
                         
                         var lcd = lcdSlim.FatBlock as Ingame.IMyTextPanel;
                         
-                        if(settings.displayBorderSuitColor && slowUpdateCharObj == 0)
+                        if(settings.displayBorderSuitColor && tick % SKIP_TICKS_HUD == 0)
                         {
-                            var charObj = characterEntity.GetObjectBuilder(false) as MyObjectBuilder_Character;
+                            var charObj = characterEntity.GetObjectBuilder(false) as MyObjectBuilder_Character; // TODO find alternatives
                             var charColor = charObj.ColorMaskHSV;
                             
                             if(Vector3.DistanceSquared(lcdSlim.GetColorMask(), charColor) > 0f)
@@ -814,13 +854,14 @@ namespace Digi.Helmet
                                 unit = "km/h";
                             }
                             
-                            str.Append(DISPLAY_PAD).Append("Speed: ").Append(speed).Append(unit).Append(" (").Append(accelSymbol).Append(Math.Round(accel, 2)).Append(unit).Append(")").AppendLine();
+                            str.Append(DISPLAY_PAD).Append("Speed: ").Append(speed.ToString(FLOAT_FORMAT)).Append(unit).Append(" (").Append(accelSymbol).Append(accel.ToString(FLOAT_FORMAT)).Append(unit).Append(")").AppendLine();
+                            str.Append(DISPLAY_PAD).Append("Altitude: ").Append(altitude.ToString(FLOAT_FORMAT)).Append("m").AppendLine(); // TODO graphical representation of horizon line
                             
                             str.Append(DISPLAY_PAD).Append("Gravity: ");
                             if(gravitySources > 0)
-                                str.Append(Math.Round(gravityForce, 2)).Append("g (").Append(gravitySources).Append(gravitySources > 1 ? " fields" : " field").Append(")");
+                                str.Append(Math.Round(naturalForce, 2)).Append("g natural, ").Append(Math.Round(artificialForce, 2)).Append("g artificial");
                             else
-                                str.Append("Not in gravity");
+                                str.Append("None");
                             str.AppendLine();
                             
                             if(inShip)
@@ -829,9 +870,9 @@ namespace Digi.Helmet
                                 str.Append(DISPLAY_PAD).Append("Ship mass: ");
                                 
                                 if(s.Mass > 1000000)
-                                    str.Append(s.Mass / 100000).Append(" tonnes");
+                                    str.Append((s.Mass / 100000f).ToString(FLOAT_FORMAT)).Append(" tonnes");
                                 else
-                                    str.Append(s.Mass).Append(" kg");
+                                    str.Append(s.Mass.ToString(FLOAT_FORMAT)).Append(" kg");
                                 
                                 str.AppendLine();
                                 
@@ -855,12 +896,17 @@ namespace Digi.Helmet
                                 
                                 str.AppendLine();
                                 str.Append(DISPLAY_PAD).Append("Landing gears: ").Append(s.LandingGearsInProximity).Append(" / ").Append(s.LandingGearsLocked).Append(" / ").Append(s.LandingGearsTotal).AppendLine();
-                                str.AppendLine();
                             }
                             else
                             {
-                                str.Append(DISPLAY_PAD).Append("Mass: ").Append(MyHud.CharacterInfo.Mass.ToString("N")).Append(" kg").AppendLine();
-                                str.Append(DISPLAY_PAD).Append("Inventory: ").Append(Math.Round((float)MyHud.CharacterInfo.InventoryVolume * 1000, 2)).Append(" L").AppendLine();
+                                str.Append(DISPLAY_PAD).Append("Inventory: ").Append(Math.Round((float)MyHud.CharacterInfo.InventoryVolume * 1000, 2).ToString(FLOAT_FORMAT)).Append(" L (").Append(Math.Round(inventoryMass, 2).ToString(FLOAT_FORMAT)).Append(" kg)").AppendLine();
+                                
+                                float mass = MyHud.CharacterInfo.Mass;
+                                
+                                if(characterEntity != null && characterEntity.Physics != null)
+                                    mass = characterEntity.Physics.Mass + inventoryMass;
+                                
+                                str.Append(DISPLAY_PAD).Append("Mass: ").Append(mass.ToString(FLOAT_FORMAT)).Append(" kg").AppendLine();
                                 
                                 /*
                                 float power = MyHud.CharacterInfo.BatteryEnergy;
@@ -1045,8 +1091,6 @@ namespace Digi.Helmet
                                 float h = MyHud.CharacterInfo.HydrogenRatio * 100;
                                 str.Append(LCD_PAD).Append("Hydrogen: ").Append((int)h).Append("% (?s)").AppendLine();
                                  */
-                                
-                                str.AppendLine();
                                 
                                 //str.Append(LCD_PAD).Append("FPS: "+MyHud.Netgraph.FramesPerSecond+"; UPS: "+MyHud.Netgraph.UpdatesPerSecond+"; Ping:"+MyHud.Netgraph.Ping).AppendLine();
                             }
@@ -1619,14 +1663,50 @@ namespace Digi.Helmet
             MaxStoredPower = float.MaxValue,
         };
         
-        public static void GetGravityAtPoint(Vector3D point, ref Vector3 gravity, ref float g, ref int sources)
+        public void CalculateGravityAndPlanetsAt(Vector3D point)
         {
-            gravity = Vector3.Zero;
-            g = 0;
-            sources = 0;
+            var artificialDir = Vector3.Zero;
+            var naturalDir = Vector3.Zero;
+            artificialForce = 0;
+            naturalForce = 0;
+            gravitySources = 0;
+            altitude = 0;
             
             try
             {
+                foreach(var kv in planets)
+                {
+                    var planet = kv.Value;
+                    
+                    if(planet.Closed || planet.MarkedForClose)
+                    {
+                        removePlanets.Add(kv.Key);
+                        continue;
+                    }
+                    
+                    var dir = planet.PositionComp.GetPosition() - point;
+                    
+                    if(dir.LengthSquared() <= planet.GravityLimitSq)
+                    {
+                        altitude = (float)Vector3D.Distance(point, planet.GetClosestSurfacePointGlobal(ref point));
+                        dir.Normalize();
+                        naturalDir += dir * planet.GetGravityMultiplier(point);
+                        gravitySources++;
+                    }
+                }
+                
+                if(removePlanets.Count > 0)
+                {
+                    foreach(var id in removePlanets)
+                    {
+                        planets.Remove(id);
+                    }
+                    
+                    removePlanets.Clear();
+                }
+                
+                naturalForce = naturalDir.Length();
+                
                 foreach(var generator in gravityGenerators)
                 {
                     if(generator.IsWorking)
@@ -1639,8 +1719,8 @@ namespace Digi.Helmet
                             {
                                 var dir = generator.WorldMatrix.Translation - point;
                                 dir.Normalize();
-                                gravity += (Vector3)dir * (gen.Gravity / 9.81f); // TODO: remove division once gravity value is fixed
-                                sources++;
+                                artificialDir += (Vector3)dir * (gen.Gravity / 9.81f); // TODO: remove division once gravity value is fixed
+                                gravitySources++;
                             }
                         }
                         else if(generator is IMyGravityGenerator)
@@ -1652,14 +1732,17 @@ namespace Digi.Helmet
                             
                             if(box.Contains(ref point))
                             {
-                                gravity += gen.WorldMatrix.Down * gen.Gravity;
-                                sources++;
+                                artificialDir += gen.WorldMatrix.Down * gen.Gravity;
+                                gravitySources++;
                             }
                         }
                     }
                 }
                 
-                g = (float)gravity.Length();
+                float mul = MathHelper.Clamp(1f - naturalForce * 2f, 0f, 1f);
+                artificialDir *= mul;
+                artificialForce = artificialDir.Length();
+                gravityDir = Vector3D.Normalize(naturalDir + artificialDir);
             }
             catch(Exception e)
             {
@@ -1825,6 +1908,22 @@ namespace Digi.Helmet
                 {
                     MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Glass reflections turned ON; saved to config.");
                     settings.glass = true;
+                    settings.Save();
+                    RemoveHelmet();
+                    return;
+                }
+                else if(msg.StartsWith("lcd off"))
+                {
+                    MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "LCD turned OFF; saved to config.");
+                    settings.elements[Icons.DISPLAY].show = false;
+                    settings.Save();
+                    RemoveHelmet();
+                    return;
+                }
+                else if(msg.StartsWith("lcd on"))
+                {
+                    MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "LCD turned ON; saved to config.");
+                    settings.elements[Icons.DISPLAY].show = true;
                     settings.Save();
                     RemoveHelmet();
                     return;
