@@ -58,8 +58,8 @@ namespace Digi.Helmet
         //private int slowUpdateFov = 0;
         
         public static List<IMyGravityGeneratorBase> gravityGenerators = new List<IMyGravityGeneratorBase>();
-        //private Vector3 artificialDir = Vector3.Zero;
-        //private Vector3 naturalDir = Vector3.Zero;
+        private Vector3 artificialDir = Vector3.Zero;
+        private Vector3 naturalDir = Vector3.Zero;
         private Vector3 gravityDir = Vector3.Zero;
         private float artificialForce = 0;
         private float naturalForce = 0;
@@ -67,28 +67,23 @@ namespace Digi.Helmet
         private float altitude = 0;
         private float inventoryMass = 0;
         private bool prevGravityStatus = false;
-        private const int SKIP_TICKS_GRAVITY = 6;
+        
+        private short tick = 0;
         private const int SKIP_TICKS_FOV = 60;
         private const int SKIP_TICKS_HUD = 5;
+        private const int SKIP_TICKS_GRAVITY = 2;
+        private const int SKIP_TICKS_PLANETS = 60*3;
         
         private bool firstHelmetSpawn = true;
         private MatrixD helmetMatrix;
         private float[] values = new float[Settings.TOTAL_ELEMENTS];
         private bool[] show = new bool[Settings.TOTAL_ELEMENTS];
         private MatrixD lastMatrix;
-        //private MatrixD temp;
-        //private Vector3D pos;
         private int lastOxygenEnv = 0;
         private bool fatalError = false;
         
-        //private MyObjectBuilder_Character characterObject;
-        private short tick = 0;
-        
-        //private int slowUpdateCharObj = 0;
-        
         public static IMyEntity holdingTool = null;
-        public static string holdingToolTypeId = null;
-        public static string holdingToolSubtypeId = null;
+        public static MyDefinitionId holdingToolId;
         
         public IMyEntity[] iconEntities = new IMyEntity[Settings.TOTAL_ELEMENTS];
         public IMyEntity[] iconBarEntities = new IMyEntity[Settings.TOTAL_ELEMENTS];
@@ -99,7 +94,6 @@ namespace Digi.Helmet
         private int skipDisplay = 0;
         private float prevSpeed = 0;
         
-        /*
         private float prevBattery = -1;
         private long prevBatteryTime = 0;
         private float prevO2 = -1;
@@ -109,21 +103,17 @@ namespace Digi.Helmet
         private float etaPower = 0;
         private float etaO2 = 0;
         private float etaH = 0;
-         */
         
         private StringBuilder str = new StringBuilder();
         private const string DISPLAY_PAD = " ";
         private const float DISPLAY_FONT_SIZE = 1.3f;
-        private const string NUMBER_FORMAT = "###,###,###";
-        private const string FLOAT_FORMAT = "###,###,###.##";
+        private const string NUMBER_FORMAT = "###,###,##0";
+        private const string FLOAT_FORMAT = "###,###,##0.##";
         
         //private int flickerResetBgColor = 0;
         //private int flickerTimeOut = 0;
         
         public Dictionary<long, MyPlanet> planets = new Dictionary<long, MyPlanet>();
-        private List<long> removePlanets = new List<long>();
-        //private int slowUpdatePlanets = 0;
-        private const int SKIP_TICKS_PLANETS = 60*3;
         private static HashSet<IMyEntity> ents = new HashSet<IMyEntity>(); // this is always empty
         
         private Random rand = new Random();
@@ -274,7 +264,6 @@ namespace Digi.Helmet
                 {
                     if(tick % SKIP_TICKS_FOV == 0)
                     {
-                        //slowUpdateFov = 0;
                         float fov = MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView);
                         
                         if(oldFov != fov)
@@ -332,7 +321,7 @@ namespace Digi.Helmet
         {
             var controllable = characterEntity as Sandbox.ModAPI.Interfaces.IMyControllableEntity;
             
-            if(controllable != null && controllable.EnabledHelmet)
+            if(controllable != null && (settings.hudAlways || controllable.EnabledHelmet))
             {
                 // ignoring head Y axis on foot because of an issue with ALT and 3rd person camera bumping into the ground
                 bool inCockpit = (MyAPIGateway.Session.ControlledObject.Entity is IMyCockpit);
@@ -345,20 +334,20 @@ namespace Digi.Helmet
         
         private void RemoveHelmet(bool removeHud = true)
         {
-            if(removedHelmet)
-                return;
-            
-            removedHelmet = true;
-            
-            if(helmet != null)
+            if(!removedHelmet)
             {
-                if(characterEntity != null)
-                    helmet.SetPosition(characterEntity.WorldMatrix.Translation + characterEntity.WorldMatrix.Backward * 5000);
-                else
-                    helmet.SetPosition(Vector3D.Zero);
+                removedHelmet = true;
                 
-                helmet.Close();
-                helmet = null;
+                if(helmet != null)
+                {
+                    if(characterEntity != null)
+                        helmet.SetPosition(characterEntity.WorldMatrix.Translation + characterEntity.WorldMatrix.Backward * 5000);
+                    else
+                        helmet.SetPosition(Vector3D.Zero);
+                    
+                    helmet.Close();
+                    helmet = null;
+                }
             }
             
             if(removeHud)
@@ -407,17 +396,7 @@ namespace Digi.Helmet
                 if(fatalError)
                     return; // stop trying if a fatal error occurs
                 
-                /*
-                bool slowUpdate = false; // slow update stats later on
-                
-                // Update the character object slowly
-                if(++slowUpdateCharObj % 10 == 0)
-                {
-                    slowUpdateCharObj = 0;
-                    slowUpdate = true;
-                    //characterObject = characterEntity.GetObjectBuilder(false) as MyObjectBuilder_Character;
-                }
-                 */
+                bool helmetOn = (characterEntity as Sandbox.ModAPI.Interfaces.IMyControllableEntity).EnabledHelmet;
                 
                 if(firstHelmetSpawn)
                 {
@@ -427,26 +406,34 @@ namespace Digi.Helmet
                         MyAPIGateway.Utilities.ShowMissionScreen("Helmet mod update", "", "TL;DR: Running DX11 ? Type in chat: /helmet dx11", "\nThe mod now has individual tweaks for DX9 and DX11 and because it can't detect what you're running it's set for DX9 by default.\n\nIf you're running DX11 type /helmet dx11 in chat!\n\nAlso there's a new LCD screen if you hide the vanilla HUD!\n\n\n\nFor the full changelog visit the workshop page: http://steamcommunity.com/sharedfiles/filedetails/?id=428842256 (or just search for 'helmet' in the Space Engineers Steam workshop).", null, "Close");
                 }
                 
-                bool brokenHelmet = helmetBroken > 0 && helmetBroken == characterEntity.EntityId;
+                bool brokenHelmet = (helmetBroken > 0 && helmetBroken == characterEntity.EntityId);
                 
-                if(brokenHelmet)
+                if(helmetOn && brokenHelmet)
                 {
-                    RemoveHelmet(false);
+                    RemoveHelmet();
                     helmetBroken = 0;
                 }
                 
-                // Spawn the helmet model if it's not spawned
-                if(brokenHelmet || (helmet == null && settings.helmetModel != null))
+                if(helmetOn)
                 {
-                    helmet = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HELMET_PREFIX + (brokenHelmet ? CUBE_HELMET_BROKEN_SUFFIX : settings.GetHelmetModel()));
-                    
-                    if(helmet == null)
+                    // Spawn the helmet model if it's not spawned
+                    if(brokenHelmet || (helmet == null && settings.helmetModel != null))
                     {
-                        Log.Error("Couldn't load the helmet prefab!");
-                        fatalError = true;
-                        return;
+                        helmet = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HELMET_PREFIX + (brokenHelmet ? CUBE_HELMET_BROKEN_SUFFIX : settings.GetHelmetModel()));
+                        
+                        if(helmet == null)
+                        {
+                            Log.Error("Couldn't load the helmet prefab!");
+                            fatalError = true;
+                            return;
+                        }
                     }
                 }
+                else if(helmet != null) // remove the helmet if it's taken off
+                {
+                    RemoveHelmet(false);
+                }
+                
                 
                 // No smoothing when in a cockpit/seat since it already is smoothed
                 if(!(MyAPIGateway.Session.Player.Controller.ControlledEntity.Entity is Sandbox.ModAPI.Ingame.IMyCockpit))
@@ -502,13 +489,13 @@ namespace Digi.Helmet
                 }
                 
                 // Align the helmet mesh
-                helmetMatrix = matrix;
-                helmetMatrix.Translation += matrix.Forward * (SCALE_DIST_ADJUST * (1.0 - settings.scale));
-                
-                if(helmet != null)
+                if(helmetOn && helmet != null)
+                {
+                    helmetMatrix = matrix;
+                    helmetMatrix.Translation += matrix.Forward * (SCALE_DIST_ADJUST * (1.0 - settings.scale));
                     helmet.SetWorldMatrix(helmetMatrix);
-                
-                removedHelmet = false;
+                    removedHelmet = false;
+                }
                 
                 // if HUD is disabled or we can't get the info, remove the HUD (if exists) and stop here
                 if(!settings.hud) // || characterObject == null)
@@ -521,8 +508,6 @@ namespace Digi.Helmet
                 
                 if(tick % SKIP_TICKS_HUD == 0)
                 {
-                    //slowUpdateCharObj = 0;
-                    
                     // show and value cache for the HUD elements
                     for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
                     {
@@ -533,13 +518,16 @@ namespace Digi.Helmet
                     bool inShip = MyHud.ShipInfo.Visible;
                     var v = MyHud.ShipInfo;
                     
-                    show[Icons.BROADCASTING] = MyHud.CharacterInfo.BroadcastEnabled; // characterObject.EnableBroadcasting;
-                    show[Icons.DAMPENERS] = (inShip ? MyHud.ShipInfo.DampenersEnabled : c.DampenersEnabled); // characterObject.DampenersEnabled;
+                    if(settings.elements[Icons.BROADCASTING].show)
+                        show[Icons.BROADCASTING] = MyHud.CharacterInfo.BroadcastEnabled;
+                    
+                    if(settings.elements[Icons.DAMPENERS].show)
+                        show[Icons.DAMPENERS] = (inShip ? v.DampenersEnabled : c.DampenersEnabled);
                     
                     values[Icons.HEALTH] = (characterEntity is IMyDestroyableObject ? (characterEntity as IMyDestroyableObject).Integrity : 100);
-                    values[Icons.ENERGY] = c.BatteryEnergy; // (characterObject.Battery != null ? characterObject.Battery.CurrentCapacity * 10000000 : 0);
+                    values[Icons.ENERGY] = c.BatteryEnergy;
                     values[Icons.HYDROGEN] = c.HydrogenRatio * 100;
-                    values[Icons.OXYGEN] = c.OxygenLevel * 100; // characterObject.OxygenLevel * 100;
+                    values[Icons.OXYGEN] = c.OxygenLevel * 100;
                     values[Icons.OXYGEN_ENV] = (characterEntity as IMyCharacter).EnvironmentOxygenLevel * 2;
                     values[Icons.INVENTORY] = 0;
                     inventoryMass = 0;
@@ -582,10 +570,11 @@ namespace Digi.Helmet
                     }
                 }
                 
-                if(show[Icons.GRAVITY] || show[Icons.DISPLAY])
+                if(show[Icons.GRAVITY] || show[Icons.DISPLAY] || show[Icons.HORIZON])
                 {
                     if(tick % SKIP_TICKS_PLANETS == 0)
                     {
+                        planets.Clear();
                         MyAPIGateway.Entities.GetEntities(ents, delegate(IMyEntity e)
                                                           {
                                                               if(e is MyPlanet)
@@ -615,30 +604,14 @@ namespace Digi.Helmet
                             prevGravityStatus = !prevGravityStatus;
                         }
                     }
-                }
-                
-                /*
-                if(settings.elements[Icons.WARNING].show &&
-                   (values[Icons.HEALTH] <= settings.elements[Icons.HEALTH].warnPercent
-                    || values[Icons.ENERGY] <= settings.elements[Icons.ENERGY].warnPercent
-                    || values[Icons.OXYGEN] <= settings.elements[Icons.OXYGEN].warnPercent
-                    || (values[Icons.HYDROGEN] <= settings.elements[Icons.HYDROGEN].warnPercent && (settings.elements[Icons.HYDROGEN].warnMoveMode == 0 ? true : settings.elements[Icons.HYDROGEN].warnMoveMode == moveMode))))
-                {
-                    double warnTick = DateTime.UtcNow.Ticks;
                     
-                    if(lastWarningBlink < warnTick)
-                    {
-                        warningBlinkOn = !warningBlinkOn;
-                        lastWarningBlink = warnTick + (TimeSpan.TicksPerSecond * settings.warnBlinkTime);
-                    }
-                    
-                    show[Icons.WARNING] = true;
+                    var controller = MyAPIGateway.Session.ControlledObject as MyShipController;
+                    show[Icons.HORIZON] = (naturalForce > 0 && controller != null && controller.HorizonIndicatorEnabled);
                 }
-                 */
                 
                 matrix.Translation += matrix.Forward * (HUDSCALE_DIST_ADJUST * (1.0 - settings.hudScale)); // off-set the HUD according to the HUD scale
                 var headPos = matrix.Translation + (matrix.Backward * 0.25); // for glass curve effect
-                bool hudVisible = !MyAPIGateway.Session.Config.MinimalHud; // if the vanilla HUD is on or off
+                bool hudVisible = !MyHud.MinimalHud; // if the vanilla HUD is on or off
                 removedHUD = false; // mark the HUD as not removed because we're about to spawn it
                 
                 // spawn and update the HUD elements
@@ -697,35 +670,35 @@ namespace Digi.Helmet
                     return; // and STOP!
                 }
                 
-                string name = element.name;
-                
-                // append the oxygen level number to the name and remove the previous entity if changed
-                if(id == Icons.OXYGEN_ENV)
-                {
-                    int oxygenEnv = Math.Min(Math.Max((int)Math.Round(percent), 0), 2);
-                    
-                    if(iconEntities[id] != null && lastOxygenEnv != oxygenEnv)
-                    {
-                        iconEntities[id].Close();
-                        iconEntities[id] = null;
-                    }
-                    
-                    lastOxygenEnv = oxygenEnv;
-                    name += oxygenEnv.ToString();
-                }
-                
-                // set the gravity icon type and update the gravity direction
-                if(id == Icons.GRAVITY)
-                {
-                    if(gravitySources == 0)
-                        name += "None";
-                    else
-                        name += "Dir";
-                }
-                
                 // spawn the element if it's not already
                 if(iconEntities[id] == null)
                 {
+                    string name = element.name;
+                    
+                    // append the oxygen level number to the name and remove the previous entity if changed
+                    if(id == Icons.OXYGEN_ENV)
+                    {
+                        int oxygenEnv = Math.Min(Math.Max((int)Math.Round(percent), 0), 2);
+                        
+                        if(iconEntities[id] != null && lastOxygenEnv != oxygenEnv)
+                        {
+                            iconEntities[id].Close();
+                            iconEntities[id] = null;
+                        }
+                        
+                        lastOxygenEnv = oxygenEnv;
+                        name += oxygenEnv.ToString();
+                    }
+                    
+                    // set the gravity icon type and update the gravity direction
+                    if(id == Icons.GRAVITY)
+                    {
+                        if(gravitySources == 0)
+                            name += "None";
+                        else
+                            name += "Dir";
+                    }
+                    
                     if(id == Icons.DISPLAY)
                     {
                         iconEntities[id] = SpawnPrefab(CUBE_HUD_PREFIX + name + (settings.displayQuality == 0 ? "Low" : ""), true);
@@ -746,26 +719,64 @@ namespace Digi.Helmet
                     return;
                 }
                 
-                matrix.Translation += (matrix.Left * element.posLeft) + (matrix.Up * element.posUp);
-                
                 // update the gravity indicator
                 if(id == Icons.GRAVITY && gravitySources > 0)
                 {
+                    // TODO optimize ?!
+                    
                     matrix.Translation += matrix.Forward * 0.05;
+                    headPos += matrix.Forward * 0.22;
+                    
+                    var dirV = Vector3D.Normalize(headPos - (matrix.Translation + matrix.Up * element.posUp));
+                    var dirH = Vector3D.Normalize(headPos - (matrix.Translation + matrix.Left * element.posLeft));
+                    
+                    matrix.Translation += (matrix.Left * element.posLeft) + (matrix.Up * element.posUp);
+                    
+                    float angV = (float)Math.Acos(Math.Round(Vector3D.Dot(matrix.Backward, dirV), 4));
+                    float angH = (float)Math.Acos(Math.Round(Vector3D.Dot(matrix.Backward, dirH), 4));
+                    
+                    if(element.posUp > 0)
+                        angV = -angV;
+                    
+                    if(element.posLeft < 0)
+                        angH = -angH;
+                    
+                    var offsetV = MatrixD.CreateFromAxisAngle(matrix.Left, angV);
+                    var offsetH = MatrixD.CreateFromAxisAngle(matrix.Up, angH);
                     
                     AlignToVector(ref matrix, gravityDir);
                     
-                    // TODO fix the perspective misalignment
+                    var tmp = matrix.Translation;
+                    matrix = matrix * offsetV * offsetH;
+                    matrix.Translation = tmp;
+                    
+                    /* old code with perspective issues
+                    matrix.Translation += matrix.Forward * 0.05;
+                    matrix.Translation += (matrix.Left * element.posLeft) + (matrix.Up * element.posUp);
+                    AlignToVector(ref matrix, gravityDir);
+                     */
                     
                     iconEntities[id].SetWorldMatrix(matrix);
                     return;
                 }
                 
+                // more curvature for the display
                 if(id == Icons.DISPLAY)
-                    headPos += matrix.Forward * 0.23; // more curvature for the screen
+                    headPos += matrix.Forward * 0.23;
                 
-                // align the element to the view and give it the glass curve
-                TransformHUD(ref matrix, matrix.Translation + matrix.Forward * 0.05, headPos, -matrix.Up, matrix.Forward);
+                // horizon crosshair is always centered, no reason to apply TransformHUD()
+                if(id == Icons.HORIZON)
+                {
+                    matrix.Translation += matrix.Forward * 0.05; // TODO fix the whiteness issue with horizon indicator and remove this afterwards
+                }
+                else
+                {
+                    matrix.Translation += (matrix.Left * element.posLeft) + (matrix.Up * element.posUp);
+                    
+                    // align the element to the view and give it the glass curve
+                    TransformHUD(ref matrix, matrix.Translation + matrix.Forward * 0.05, headPos, -matrix.Up, matrix.Forward);
+                }
+                
                 iconEntities[id].SetWorldMatrix(matrix);
                 
                 // update the display
@@ -785,17 +796,29 @@ namespace Digi.Helmet
                         
                         var lcd = lcdSlim.FatBlock as Ingame.IMyTextPanel;
                         
-                        if(settings.displayBorderSuitColor && tick % SKIP_TICKS_HUD == 0)
+                        if(tick % SKIP_TICKS_HUD == 0)
                         {
-                            var charObj = characterEntity.GetObjectBuilder(false) as MyObjectBuilder_Character; // TODO find alternatives
-                            var charColor = charObj.ColorMaskHSV;
-                            
-                            if(Vector3.DistanceSquared(lcdSlim.GetColorMask(), charColor) > 0f)
+                            if(settings.displayBorderColor.HasValue)
                             {
-                                ghostGrid.ColorBlocks(Vector3I.Zero, Vector3I.Zero, charColor);
-                                lastDisplayText = null; // force rewrite
+                                if(Vector3.DistanceSquared(lcdSlim.GetColorMask(), settings.displayBorderColor.Value) > 0f)
+                                {
+                                    ghostGrid.ColorBlocks(Vector3I.Zero, Vector3I.Zero, settings.displayBorderColor.Value);
+                                    lastDisplayText = null; // force rewrite
+                                }
+                            }
+                            else
+                            {
+                                var charColor = characterEntity.Render.ColorMaskHsv;
+                                
+                                if(Vector3.DistanceSquared(lcdSlim.GetColorMask(), charColor) > 0f)
+                                {
+                                    ghostGrid.ColorBlocks(Vector3I.Zero, Vector3I.Zero, charColor);
+                                    lastDisplayText = null; // force rewrite
+                                }
                             }
                         }
+                        
+                        str.Clear();
                         
                         if(MyHud.CharacterInfo.HealthRatio <= 0)
                         {
@@ -843,9 +866,6 @@ namespace Digi.Helmet
                                 accelSymbol = '+';
                             
                             prevSpeed = speed;
-                            
-                            str.Clear();
-                            
                             string unit = "m/s";
                             
                             if(settings.displaySpeedUnit == SpeedUnits.kph)
@@ -855,11 +875,19 @@ namespace Digi.Helmet
                             }
                             
                             str.Append(DISPLAY_PAD).Append("Speed: ").Append(speed.ToString(FLOAT_FORMAT)).Append(unit).Append(" (").Append(accelSymbol).Append(accel.ToString(FLOAT_FORMAT)).Append(unit).Append(")").AppendLine();
-                            str.Append(DISPLAY_PAD).Append("Altitude: ").Append(altitude.ToString(FLOAT_FORMAT)).Append("m").AppendLine(); // TODO graphical representation of horizon line
+                            
+                            str.Append(DISPLAY_PAD).Append("Altitude: ");
+                            
+                            if(naturalForce > 0)
+                                str.Append(altitude.ToString(FLOAT_FORMAT)).Append("m");
+                            else
+                                str.Append("N/A");
+                            
+                            str.AppendLine();
                             
                             str.Append(DISPLAY_PAD).Append("Gravity: ");
                             if(gravitySources > 0)
-                                str.Append(Math.Round(naturalForce, 2)).Append("g natural, ").Append(Math.Round(artificialForce, 2)).Append("g artificial");
+                                str.Append(Math.Round(naturalForce, 2)).Append("g natural, ").Append(Math.Round(artificialForce, 2)).Append("g artif.");
                             else
                                 str.Append("None");
                             str.AppendLine();
@@ -908,191 +936,94 @@ namespace Digi.Helmet
                                 
                                 str.Append(DISPLAY_PAD).Append("Mass: ").Append(mass.ToString(FLOAT_FORMAT)).Append(" kg").AppendLine();
                                 
-                                /*
-                                float power = MyHud.CharacterInfo.BatteryEnergy;
-                                float o2 = MyHud.CharacterInfo.OxygenLevel * 100;
-                                float h = MyHud.CharacterInfo.HydrogenRatio * 100;
-                                long now = DateTime.UtcNow.Ticks;
-                                
-                                if(prevBattery != power)
+                                if(MyAPIGateway.Session.CreativeMode)
                                 {
-                                    if(prevBattery > power)
+                                    str.Append("No resource is being drained.");
+                                }
+                                else
+                                {
+                                    float power = MyHud.CharacterInfo.BatteryEnergy;
+                                    float o2 = MyHud.CharacterInfo.OxygenLevel * 100;
+                                    float h = MyHud.CharacterInfo.HydrogenRatio * 100;
+                                    long now = DateTime.UtcNow.Ticks;
+                                    
+                                    if(prevBattery != power)
                                     {
-                                        float elapsed = (float)TimeSpan.FromTicks(now - prevBatteryTime).TotalSeconds;
-                                        etaPower = (0 - power) / ((power - prevBattery) / elapsed);
-                                        
-                                        if(etaPower < 0)
+                                        if(prevBattery > power)
+                                        {
+                                            float elapsed = (float)TimeSpan.FromTicks(now - prevBatteryTime).TotalSeconds;
+                                            etaPower = (0 - power) / ((power - prevBattery) / elapsed);
+                                            
+                                            if(etaPower < 0)
+                                                etaPower = float.PositiveInfinity;
+                                            
+                                            prevBatteryTime = now;
+                                        }
+                                        else
                                             etaPower = float.PositiveInfinity;
                                         
-                                        prevBatteryTime = now;
+                                        prevBattery = power;
                                     }
-                                    else
-                                        etaPower = float.PositiveInfinity;
                                     
-                                    prevBattery = power;
-                                }
-                                
-                                if(prevO2 != o2)
-                                {
-                                    float elapsed = (float)TimeSpan.FromTicks(now - prevO2Time).TotalSeconds;
-                                    etaO2 = (0 - o2) / ((o2 - prevO2) / elapsed);
-                                    
-                                    if(etaO2 < 0)
-                                        etaO2 = float.PositiveInfinity;
-                                    
-                                    prevO2 = o2;
-                                    prevO2Time = now;
-                                }
-                                
-                                float elapsedH = (float)TimeSpan.FromTicks(now - prevHTime).TotalSeconds;
-                                
-                                if(prevH != h || elapsedH > (TimeSpan.TicksPerSecond * 2))
-                                {
-                                    float diff = h - prevH;
-                                    
-                                    if(diff < 0)
+                                    if(prevO2 != o2)
                                     {
-                                        etaH = (0 - h) / ((h - prevH) / elapsedH);
+                                        float elapsed = (float)TimeSpan.FromTicks(now - prevO2Time).TotalSeconds;
+                                        etaO2 = (0 - o2) / ((o2 - prevO2) / elapsed);
                                         
-                                        if(etaH < 0)
+                                        if(etaO2 < 0)
+                                            etaO2 = float.PositiveInfinity;
+                                        
+                                        prevO2 = o2;
+                                        prevO2Time = now;
+                                    }
+                                    
+                                    float elapsedH = (float)TimeSpan.FromTicks(now - prevHTime).TotalSeconds;
+                                    
+                                    if(prevH != h || elapsedH > (TimeSpan.TicksPerSecond * 2))
+                                    {
+                                        float diff = h - prevH;
+                                        
+                                        if(diff < 0)
+                                        {
+                                            etaH = (0 - h) / ((h - prevH) / elapsedH);
+                                            
+                                            if(etaH < 0)
+                                                etaH = float.PositiveInfinity;
+                                        }
+                                        else
                                             etaH = float.PositiveInfinity;
+                                        
+                                        prevH = h;
+                                        prevHTime = now;
                                     }
-                                    else
-                                        etaH = float.PositiveInfinity;
                                     
-                                    prevH = h;
-                                    prevHTime = now;
-                                }
-                                
-                                // TODO >...............
-                                
-                                str.Append(LCD_PAD);
-                                
-                                if(etaPower < etaO2 && etaPower < etaH)
-                                {
-                                    str.Append("Battery: ").Append(Math.Round(power, 2)).Append("% (");
-                                    MyValueFormatter.AppendTimeInBestUnit(etaPower, str);
-                                    str.Append(")");
-                                }
-                                else if(etaO2 < etaPower && etaO2 < etaH)
-                                {
-                                    str.Append("Oxygen: ").Append(Math.Round(o2, 2)).Append("% (");
-                                    MyValueFormatter.AppendTimeInBestUnit(etaO2, str);
-                                    str.Append(")");
-                                }
-                                else if(etaH < etaPower && etaH < etaO2)
-                                {
-                                    str.Append("Hydrogen: ").Append(Math.Round(h, 2)).Append("% (");
-                                    MyValueFormatter.AppendTimeInBestUnit(etaH, str);
-                                    str.Append(")");
-                                }
-                                else
-                                {
-                                    str.Append("Calculating...");
-                                }
-                                 */
-                                
-                                str.AppendLine();
-                                
-                                /*
-                                str.Append(LCD_PAD).Append("Battery: ");
-                                
-                                float bat = MyHud.CharacterInfo.BatteryEnergy;
-                                
-                                if(bat != prevBattery)
-                                {
-                                    long now = DateTime.UtcNow.Ticks;
-                                    float elapsed = (float)TimeSpan.FromTicks(now - prevBatteryTime).TotalSeconds;
-                                    float diff = bat - prevBattery;
-                                    float eta;
-                                    tmp.Clear();
+                                    str.Append(DISPLAY_PAD);
                                     
-                                    if(prevBattery > bat)
+                                    if(etaPower < etaO2 && etaPower < etaH)
                                     {
-                                        eta = (0 - bat) / (diff / elapsed);
+                                        str.Append("Battery: ").Append(Math.Round(power, 2)).Append("% (");
+                                        MyValueFormatter.AppendTimeInBestUnit(etaPower, str);
+                                        str.Append(")");
+                                    }
+                                    else if(etaO2 < etaPower && etaO2 < etaH)
+                                    {
+                                        str.Append("Oxygen: ").Append(Math.Round(o2, 2)).Append("% (");
+                                        MyValueFormatter.AppendTimeInBestUnit(etaO2, str);
+                                        str.Append(")");
+                                    }
+                                    else if(etaH < etaPower && etaH < etaO2)
+                                    {
+                                        str.Append("Hydrogen: ").Append(Math.Round(h, 2)).Append("% (");
+                                        MyValueFormatter.AppendTimeInBestUnit(etaH, str);
+                                        str.Append(")");
                                     }
                                     else
                                     {
-                                        tmp.Append("+");
-                                        eta = (100 - bat) / (diff / elapsed);
+                                        str.Append("Calculating...");
                                     }
-                                    
-                                    tmp.Append(Math.Round(bat, 2)).Append("% (");
-                                    MyValueFormatter.AppendTimeInBestUnit(eta, tmp);
-                                    tmp.Append(")");
-                                    batteryTimeCache = tmp.ToString();
-                                    tmp.Clear();
-                                    
-                                    prevBatteryTime = now;
-                                    prevBattery = bat;
                                 }
                                 
-                                if(batteryTimeCache == null)
-                                    str.Append(Math.Round(bat, 2)).Append("% (calc.)");
-                                else
-                                    str.Append(batteryTimeCache);
-                                
                                 str.AppendLine();
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                str.Append(LCD_PAD).Append("Oxygen: ");
-                                
-                                float o2 = MyHud.CharacterInfo.OxygenLevel * 100;
-                                
-                                if(o2 != prevBattery)
-                                {
-                                    long now = DateTime.UtcNow.Ticks;
-                                    float elapsed = (float)TimeSpan.FromTicks(now - prevBatteryTime).TotalSeconds;
-                                    float diff = o2 - prevBattery;
-                                    float eta;
-                                    tmp.Clear();
-                                    
-                                    if(prevBattery > o2)
-                                    {
-                                        eta = (0 - o2) / (diff / elapsed);
-                                    }
-                                    else
-                                    {
-                                        tmp.Append("+");
-                                        eta = (100 - o2) / (diff / elapsed);
-                                    }
-                                    
-                                    tmp.Append(Math.Round(o2, 2)).Append("% (");
-                                    MyValueFormatter.AppendTimeInBestUnit(eta, tmp);
-                                    tmp.Append(")");
-                                    batteryTimeCache = tmp.ToString();
-                                    tmp.Clear();
-                                    
-                                    prevBatteryTime = now;
-                                    prevBattery = o2;
-                                }
-                                
-                                if(batteryTimeCache == null)
-                                    str.Append(Math.Round(o2, 2)).Append("% (calc.)");
-                                else
-                                    str.Append(batteryTimeCache);
-                                
-                                str.AppendLine();
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                
-                                float h = MyHud.CharacterInfo.HydrogenRatio * 100;
-                                str.Append(LCD_PAD).Append("Hydrogen: ").Append((int)h).Append("% (?s)").AppendLine();
-                                 */
-                                
-                                //str.Append(LCD_PAD).Append("FPS: "+MyHud.Netgraph.FramesPerSecond+"; UPS: "+MyHud.Netgraph.UpdatesPerSecond+"; Ping:"+MyHud.Netgraph.Ping).AppendLine();
                             }
                             
                             str.AppendLine();
@@ -1107,24 +1038,15 @@ namespace Digi.Helmet
                                 if(holdingTool.Closed || holdingTool.MarkedForClose)
                                 {
                                     holdingTool = null;
-                                    holdingToolTypeId = null;
-                                    holdingToolSubtypeId = null;
                                 }
                                 else
                                 {
-                                    switch(holdingToolTypeId)
-                                    {
-                                        case "MyObjectBuilder_Welder":
-                                        case "MyObjectBuilder_AngleGrinder":
-                                            buildTool = true;
-                                            break;
-                                        case "MyObjectBuilder_HandDrill":
-                                            drill = true;
-                                            break;
-                                        case "MyObjectBuilder_AutomaticRifle":
-                                            weapon = true;
-                                            break;
-                                    }
+                                    if(holdingToolId.TypeId == typeof(MyObjectBuilder_Welder) || holdingToolId.TypeId == typeof(MyObjectBuilder_AngleGrinder))
+                                        buildTool = true;
+                                    else if(holdingToolId.TypeId == typeof(MyObjectBuilder_HandDrill))
+                                        drill = true;
+                                    else if(holdingToolId.TypeId == typeof(MyObjectBuilder_AutomaticRifle))
+                                        weapon = true;
                                 }
                             }
                             
@@ -1230,7 +1152,7 @@ namespace Digi.Helmet
                                             float mags = (float)inv.GetItemAmount(wepDef.AmmoMagazinesId[i], MyItemFlags.None);
                                             string magName = magDef.DisplayNameText;
                                             
-                                            if(magName.Length > 16)
+                                            if(magName.Length > 22)
                                                 magName = magName.Substring(0, 20)+"..";
                                             
                                             if(magId.SubtypeName == currentMag)
@@ -1261,6 +1183,8 @@ namespace Digi.Helmet
                                     {
                                         str.Append("Ore in range: ").Append(MyHud.OreMarkers.Count()).AppendLine();
                                     }
+                                    
+                                    // TODO selected toolbar item stats instead?
                                     
                                     bool showGatling = blockName.Contains("gatling");
                                     bool showLaunchers = blockName.Contains("launchers");
@@ -1296,7 +1220,6 @@ namespace Digi.Helmet
                                         int launchers = 0;
                                         float launchersAmmo = 0;
                                         
-                                        //Dictionary<MyDefinitionId, int> searchAmmo = new Dictionary<MyDefinitionId, int>();
                                         MyInventory inv;
                                         
                                         foreach(var slim in blocks)
@@ -1322,9 +1245,6 @@ namespace Digi.Helmet
                                                         
                                                         if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
                                                             gatlingAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
-                                                        
-                                                        //if(!searchAmmo.ContainsKey(magId))
-                                                        //    searchAmmo.Add(magId, magDef.Capacity);
                                                         
                                                         break;
                                                     }
@@ -1394,20 +1314,6 @@ namespace Digi.Helmet
                                         
                                         if(showGatling)
                                         {
-                                            //foreach(var slim in blocks)
-                                            //{
-                                            //    if(slim.FatBlock is Ingame.IMyCargoContainer)
-                                            //    {
-                                            //        if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-                                            //        {
-                                            //            foreach(var kv in searchAmmo)
-                                            //            {
-                                            //                gatlingAmmo += (float)inv.GetItemAmount(kv.Key, MyItemFlags.None) * kv.Value;
-                                            //            }
-                                            //        }
-                                            //    }
-                                            //}
-                                            
                                             str.Append(gatlingGuns).Append("x Gatling Gun: ").Append(Math.Floor(gatlingAmmo)).AppendLine();
                                         }
                                         
@@ -1476,10 +1382,28 @@ namespace Digi.Helmet
                 
                 if(iconBarEntities[id] == null)
                 {
-                    iconBarEntities[id] = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HUD_PREFIX + name + "Bar");
+                    iconBarEntities[id] = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HUD_PREFIX + element.name + "Bar");
                     
                     if(iconBarEntities[id] == null)
                         return;
+                }
+                
+                if(id == Icons.HORIZON)
+                {
+                    var controller = MyAPIGateway.Session.ControlledObject as MyShipController;
+                    
+                    var dotV = Vector3.Dot(naturalDir, controller.WorldMatrix.Forward);
+                    var dotH = Vector3.Dot(naturalDir, controller.WorldMatrix.Right);
+                    
+                    matrix.Translation += matrix.Up * (dotV * 0.035);
+                    
+                    var tmp = matrix.Translation;
+                    matrix *= MatrixD.CreateFromAxisAngle(matrix.Backward, MathHelper.ToRadians(dotH * 90));
+                    matrix.Translation = tmp;
+                    
+                    // horizon bar is not a resizable or blinking bar so just update it here and stop
+                    iconBarEntities[id].SetWorldMatrix(matrix);
+                    return;
                 }
                 
                 // blink the bar along with the warning icon
@@ -1587,10 +1511,7 @@ namespace Digi.Helmet
                     };
                     
                     if(characterEntity != null)
-                    {
-                        var charObj = characterEntity.GetObjectBuilder(false) as MyObjectBuilder_Character;
-                        PrefabBuilder.CubeBlocks[0].ColorMaskHSV = charObj.ColorMaskHSV;
-                    }
+                        PrefabBuilder.CubeBlocks[0].ColorMaskHSV = characterEntity.Render.ColorMaskHsv;
                     
                     PrefabBuilder.CubeBlocks.Add(PrefabBattery);
                 }
@@ -1603,6 +1524,11 @@ namespace Digi.Helmet
                 ent.Flags &= ~EntityFlags.Save; // don't save this entity
                 ent.PersistentFlags &= ~MyPersistentEntityFlags2.CastShadows;
                 ent.CastShadows = false;
+                
+                foreach(var c in ent.Hierarchy.Children)
+                {
+                    c.Entity.PersistentFlags &= ~MyPersistentEntityFlags2.CastShadows;
+                }
                 
                 MyAPIGateway.Entities.AddEntity(ent, true);
                 return ent;
@@ -1665,8 +1591,8 @@ namespace Digi.Helmet
         
         public void CalculateGravityAndPlanetsAt(Vector3D point)
         {
-            var artificialDir = Vector3.Zero;
-            var naturalDir = Vector3.Zero;
+            artificialDir = Vector3.Zero;
+            naturalDir = Vector3.Zero;
             artificialForce = 0;
             naturalForce = 0;
             gravitySources = 0;
@@ -1679,10 +1605,7 @@ namespace Digi.Helmet
                     var planet = kv.Value;
                     
                     if(planet.Closed || planet.MarkedForClose)
-                    {
-                        removePlanets.Add(kv.Key);
                         continue;
-                    }
                     
                     var dir = planet.PositionComp.GetPosition() - point;
                     
@@ -1693,16 +1616,6 @@ namespace Digi.Helmet
                         naturalDir += dir * planet.GetGravityMultiplier(point);
                         gravitySources++;
                     }
-                }
-                
-                if(removePlanets.Count > 0)
-                {
-                    foreach(var id in removePlanets)
-                    {
-                        planets.Remove(id);
-                    }
-                    
-                    removePlanets.Clear();
                 }
                 
                 naturalForce = naturalDir.Length();
@@ -1719,7 +1632,7 @@ namespace Digi.Helmet
                             {
                                 var dir = generator.WorldMatrix.Translation - point;
                                 dir.Normalize();
-                                artificialDir += (Vector3)dir * (gen.Gravity / 9.81f); // TODO: remove division once gravity value is fixed
+                                artificialDir += (Vector3)dir * (gen.Gravity / 9.81f); // HACK remove division once gravity value is fixed
                                 gravitySources++;
                             }
                         }

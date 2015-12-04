@@ -36,9 +36,29 @@ namespace Digi.Helmet
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
             this.objectBuilder = objectBuilder;
-            Helmet.holdingTool = Entity;
-            Helmet.holdingToolTypeId = objectBuilder.TypeId.ToString();
-            Helmet.holdingToolSubtypeId = objectBuilder.SubtypeName;
+            Entity.NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+        }
+        
+        public override void UpdateOnceBeforeFrame()
+        {
+            try
+            {
+                if(MyAPIGateway.Session.ControlledObject != null && MyAPIGateway.Session.ControlledObject.Entity is IMyCharacter)
+                {
+                    var charEnt = MyAPIGateway.Session.ControlledObject.Entity;
+                    var charObj = charEnt.GetObjectBuilder(false) as MyObjectBuilder_Character;
+                    
+                    if(charObj.HandWeapon != null && Entity.EntityId == charObj.HandWeapon.EntityId)
+                    {
+                        Helmet.holdingTool = Entity;
+                        Helmet.holdingToolId = objectBuilder.GetId();
+                    }
+                }
+            }
+            catch(Exception e)
+            {
+                Log.Error(e);
+            }
         }
         
         public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)

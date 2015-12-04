@@ -437,5 +437,46 @@
       <Public>false</Public>
     </Definition>
 
+    <Definition>
+      <Id>
+        <TypeId>TerminalBlock</TypeId>
+        <SubtypeId>HelmetHUD_horizon</SubtypeId>
+      </Id>
+      <DisplayName>HelmetHUD_horizon</DisplayName>
+      <Icon>Textures\FAKE.dds</Icon>
+      <CubeSize>Small</CubeSize>
+      <BlockTopology>TriangleMesh</BlockTopology>
+      <Size x="1" y="1" z="1" />
+      <ModelOffset x="0" y="0" z="0" />
+      <Model>Models\HorizonCrosshair.mwm</Model>
+      <Components>
+        <Component Subtype="SteelPlate" Count="1" />
+      </Components>
+      <CriticalComponent Subtype="SteelPlate" Index="0" />
+      <EdgeType>Light</EdgeType>
+      <BuildTimeSeconds>999999</BuildTimeSeconds>
+      <Public>false</Public>
+    </Definition>
+    <Definition>
+      <Id>
+        <TypeId>TerminalBlock</TypeId>
+        <SubtypeId>HelmetHUD_horizonBar</SubtypeId>
+      </Id>
+      <DisplayName>HelmetHUD_horizonBar</DisplayName>
+      <Icon>Textures\FAKE.dds</Icon>
+      <CubeSize>Small</CubeSize>
+      <BlockTopology>TriangleMesh</BlockTopology>
+      <Size x="1" y="1" z="1" />
+      <ModelOffset x="0" y="0" z="0" />
+      <Model>Models\HorizonBar.mwm</Model>
+      <Components>
+        <Component Subtype="SteelPlate" Count="1" />
+      </Components>
+      <CriticalComponent Subtype="SteelPlate" Index="0" />
+      <EdgeType>Light</EdgeType>
+      <BuildTimeSeconds>999999</BuildTimeSeconds>
+      <Public>false</Public>
+    </Definition>
+
   </CubeBlocks>
 </Definitions>

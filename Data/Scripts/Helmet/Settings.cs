@@ -81,6 +81,7 @@ namespace Digi.Helmet
         public const int DAMPENERS = 8;
         public const int GRAVITY = 9;
         public const int DISPLAY = 10;
+        public const int HORIZON = 11;
     };
     
     public class Settings
@@ -91,6 +92,7 @@ namespace Digi.Helmet
         public Renderer renderer = Renderer.DX9;
         public string helmetModel = "vignette";
         public bool hud = true;
+        public bool hudAlways = true;
         public bool glass = true;
         public bool autoFovScale = false;
         public double scale = 0.0f;
@@ -103,10 +105,10 @@ namespace Digi.Helmet
         public int displayQuality = 1;
         public Color displayFontColor = new Color(151, 226, 255);
         public Color displayBgColor = new Color(1, 2, 3);
-        public bool displayBorderSuitColor = true;
+        public Color? displayBorderColor = null;
         public SpeedUnits displaySpeedUnit = SpeedUnits.mps;
         
-        public const int TOTAL_ELEMENTS = 11; // NOTE: update Icons class when updating these
+        public const int TOTAL_ELEMENTS = 12; // NOTE: update Icons class when updating these
         public HudElement[] elements;
         public HudElement[] defaultElements = new HudElement[TOTAL_ELEMENTS]
         {
@@ -120,7 +122,8 @@ namespace Digi.Helmet
             new HudElement("broadcasting") { posLeft = 0.082, posUp = -0.077, },
             new HudElement("dampeners") { posLeft = 0.074, posUp = -0.076, },
             new HudElement("gravity") { posLeft = 0, posUp = -0.048, },
-            new HudElement("display") { posLeft = 0, posUp = -0.07, hudMode = 2, }
+            new HudElement("display") { posLeft = 0, posUp = -0.07, hudMode = 2, },
+            new HudElement("horizon") { hudMode = 2, hasBar = true, },
         };
         
         //public string[] helmetModels = new string[] { "off", "vignette", "helmetmesh" };
@@ -141,7 +144,7 @@ namespace Digi.Helmet
         
         private static char[] CHARS = new char[] { '=' };
         
-        public bool hydrogenUpdateReset = true; // TODO remove after some time
+        public bool hydrogenUpdateReset = true; // HACK remove after some time
         
         public Settings()
         {
@@ -235,6 +238,63 @@ namespace Digi.Helmet
                         args[0] = args[0].Trim().ToLower();
                         args[1] = args[1].Trim().ToLower();
                         
+                        if(currentId == Icons.HORIZON && args[0] != "hudmode")
+                            continue;
+                        
+                        if(currentId == Icons.DISPLAY)
+                        {
+                            switch(args[0])
+                            {
+                                case "update":
+                                    if(int.TryParse(args[1], out i))
+                                        displayUpdateRate = Math.Min(Math.Max(i, MIN_DISPLAYUPDATE), MAX_DISPLAYUPDATE);
+                                    else
+                                        Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                    continue;
+                                case "quality":
+                                    if(int.TryParse(args[1], out i))
+                                        displayQuality = MathHelper.Clamp(i, 0, 1);
+                                    else
+                                        Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                    continue;
+                                case "speedunit":
+                                    if(Enum.TryParse<SpeedUnits>(args[1], out u))
+                                        displaySpeedUnit = u;
+                                    else
+                                        Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                    continue;
+                                case "fontcolor":
+                                case "bgcolor":
+                                case "bordercolor":
+                                    if(args[0] == "bordercolor" && args[1] == "suit")
+                                    {
+                                        displayBorderColor = null;
+                                    }
+                                    else
+                                    {
+                                        rgb = args[1].Split(',');
+                                        if(rgb.Length >= 3 && byte.TryParse(rgb[0].Trim(), out red) && byte.TryParse(rgb[1].Trim(), out green) && byte.TryParse(rgb[2].Trim(), out blue))
+                                        {
+                                            switch(args[0])
+                                            {
+                                                case "fontcolor":
+                                                    displayFontColor = new Color(red, green, blue);
+                                                    break;
+                                                case "bgcolor":
+                                                    displayBgColor = new Color(red, green, blue);
+                                                    break;
+                                                case "bordercolor":
+                                                    displayBorderColor = new Color(red, green, blue);
+                                                    break;
+                                            }
+                                            continue;
+                                        }
+                                        Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                    }
+                                    continue;
+                            }
+                        }
+                        
                         switch(args[0])
                         {
                             case "up":
@@ -275,50 +335,6 @@ namespace Digi.Helmet
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
-                        }
-                        
-                        if(currentId == Icons.DISPLAY)
-                        {
-                            switch(args[0])
-                            {
-                                case "update":
-                                    if(int.TryParse(args[1], out i))
-                                        displayUpdateRate = Math.Min(Math.Max(i, MIN_DISPLAYUPDATE), MAX_DISPLAYUPDATE);
-                                    else
-                                        Log.Error("Invalid "+args[0]+" value: " + args[1]);
-                                    continue;
-                                case "quality":
-                                    if(int.TryParse(args[1], out i))
-                                        displayQuality = MathHelper.Clamp(i, 0, 1);
-                                    else
-                                        Log.Error("Invalid "+args[0]+" value: " + args[1]);
-                                    continue;
-                                case "bordersuitcolor":
-                                    if(bool.TryParse(args[1], out b))
-                                        displayBorderSuitColor = b;
-                                    else
-                                        Log.Error("Invalid "+args[0]+" value: " + args[1]);
-                                    continue;
-                                case "speedunit":
-                                    if(Enum.TryParse<SpeedUnits>(args[1], out u))
-                                        displaySpeedUnit = u;
-                                    else
-                                        Log.Error("Invalid "+args[0]+" value: " + args[1]);
-                                    continue;
-                                case "fontcolor":
-                                case "bgcolor":
-                                    rgb = args[1].Split(',');
-                                    if(rgb.Length >= 3 && byte.TryParse(rgb[0].Trim(), out red) && byte.TryParse(rgb[1].Trim(), out green) && byte.TryParse(rgb[2].Trim(), out blue))
-                                    {
-                                        if(args[0] == "fontcolor")
-                                            displayFontColor = new Color(red, green, blue);
-                                        else
-                                            displayBgColor = new Color(red, green, blue);
-                                        continue;
-                                    }
-                                    Log.Error("Invalid "+args[0]+" value: " + args[1]);
-                                    continue;
-                            }
                         }
                     }
                     else
@@ -479,6 +495,7 @@ namespace Digi.Helmet
             if(comments)
             {
                 str.AppendLine("// Helmet mod config; this file gets automatically overwritten!");
+                str.AppendLine("// Use /helmet reload in-game to reload the config after you've edited it.");
                 str.AppendLine("// Lines starting with // are comments");
                 str.AppendLine();
             }
@@ -497,33 +514,47 @@ namespace Digi.Helmet
             if(comments)
             {
                 str.AppendLine();
-                str.AppendLine("// Individual icon configuration (advanced)");
-                str.AppendLine("// Use /helmet reload in-game to reload the config after you've edited it.");
+                str.AppendLine("// Individual HUD element configuration (advanced)");
             }
             
             for(int id = 0; id < TOTAL_ELEMENTS; id++)
             {
                 var element = elements[id];
                 
-                str.Append(element.name).Append("=").Append(element.show).AppendLine(comments ? " // display this icon or not" : "");
-                str.Append("  up=").Append(element.posUp).AppendLine(comments ? " // position from the center towards up, use negative values for down" : "");
-                str.Append("  left=").Append(element.posLeft).AppendLine(comments ? " // position from the center towards left, use negative values for right" : "");
-                str.Append("  hudmode=").Append(element.hudMode).AppendLine(comments ? " // shows icon depending on the vanilla HUD's state: 0 = any, 1 = only when visible, 2 = only when hidden" : "");
+                str.Append(element.name).Append("=").Append(element.show).AppendLine(comments ? " // display this element or not" : "");
                 
-                if(id == Icons.DISPLAY)
+                if(id != Icons.HORIZON)
                 {
-                    str.Append("  updaterate=").Append(displayUpdateRate).AppendLine(comments ? " // updates per second, 1 to 60, default 20 (depends on simulation speed)" : "");
-                    str.Append("  quality=").Append(displayQuality).AppendLine(comments ? " // texture size and model detail, default 1 (512x512 with details), set to 0 for 256x256 without model details" : "");
-                    str.Append("  fontcolor=").Append(displayFontColor.R).Append(",").Append(displayFontColor.G).Append(",").Append(displayFontColor.B).AppendLine(comments ? " // text color in R,G,B format, default 151,226,255" : "");
-                    str.Append("  bgcolor=").Append(displayBgColor.R).Append(",").Append(displayBgColor.G).Append(",").Append(displayBgColor.B).AppendLine(comments ? " // background color in R,G,B format, default 1,2,3" : "");
-                    str.Append("  bordersuitcolor=").Append(displayBorderSuitColor).AppendLine(comments ? " // background color in R,G,B format, default 1,2,3" : "");
-                    str.Append("  speedunit=").Append(displaySpeedUnit).AppendLine(comments ? " // unit displayed for speed, options: "+String.Join(", ", Enum.GetNames(typeof(SpeedUnits))) : "");
+                    str.Append("  up=").Append(element.posUp).AppendLine(comments ? " // position from the center towards up, use negative values for down" : "");
+                    str.Append("  left=").Append(element.posLeft).AppendLine(comments ? " // position from the center towards left, use negative values for right" : "");
                 }
                 
-                if(element.warnPercent > -1)
+                str.Append("  hudmode=").Append(element.hudMode).AppendLine(comments ? " // shows icon depending on the vanilla HUD's state: 0 = any, 1 = only when visible, 2 = only when hidden" : "");
+                
+                if(id != Icons.HORIZON)
                 {
-                    str.Append("  warnpercent=").Append(element.warnPercent).AppendLine(comments ? " // warning % for this statistic" : "");
-                    str.Append("  warnmovemode=").Append(element.warnMoveMode).AppendLine(comments ? " // warning only shows in a mode: 0 = any, 1 = jetpack off, 2 = jetpack on" : "");
+                    if(id == Icons.DISPLAY)
+                    {
+                        str.Append("  updaterate=").Append(displayUpdateRate).AppendLine(comments ? " // updates per second, 1 to 60, default 20 (depends on simulation speed)" : "");
+                        str.Append("  quality=").Append(displayQuality).AppendLine(comments ? " // texture size and model detail, default 1 (512x512 with details), set to 0 for 256x256 without model details" : "");
+                        str.Append("  fontcolor=").Append(displayFontColor.R).Append(",").Append(displayFontColor.G).Append(",").Append(displayFontColor.B).AppendLine(comments ? " // text color in R,G,B format, default 151,226,255" : "");
+                        str.Append("  bgcolor=").Append(displayBgColor.R).Append(",").Append(displayBgColor.G).Append(",").Append(displayBgColor.B).AppendLine(comments ? " // background color in R,G,B format, default 1,2,3" : "");
+                        
+                        str.Append("  bordercolor=");
+                        if(displayBorderColor.HasValue)
+                            str.Append(displayBorderColor.Value.R).Append(",").Append(displayBorderColor.Value.G).Append(",").Append(displayBorderColor.Value.B);
+                        else
+                            str.Append("suit");
+                        str.AppendLine(comments ? " // LCD frame color in R,G,B format or \"suit\" to use the suit's color, default: suit" : "");
+                        
+                        str.Append("  speedunit=").Append(displaySpeedUnit).AppendLine(comments ? " // unit displayed for speed, options: "+String.Join(", ", Enum.GetNames(typeof(SpeedUnits))) : "");
+                    }
+                    
+                    if(element.warnPercent > -1)
+                    {
+                        str.Append("  warnpercent=").Append(element.warnPercent).AppendLine(comments ? " // warning % for this statistic" : "");
+                        str.Append("  warnmovemode=").Append(element.warnMoveMode).AppendLine(comments ? " // warning only shows in a mode: 0 = any, 1 = jetpack off, 2 = jetpack on" : "");
+                    }
                 }
             }
             

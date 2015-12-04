@@ -9,10 +9,10 @@ using VRage.Utils;
 
 namespace Digi.Utils
 {
-    class Log : MySessionComponentBase
+    class Log
     {
-        private const string MOD_NAME = "Helmet";
-        private const string LOG_FILE = "info.log";
+        public const string MOD_NAME = "Helmet";
+        public const string LOG_FILE = "info.log";
 
         private static System.IO.TextWriter writer = null;
         private static IMyHudNotification notify = null;
@@ -46,9 +46,9 @@ namespace Digi.Utils
             
             try
             {
-                string text = MOD_NAME + " error - open %AppData%/SpaceEngineers/Storage/" + MyAPIGateway.Session.WorkshopId + "_" + MOD_NAME + "/" + LOG_FILE + " for details";
+                MyLog.Default.WriteLineAndConsole(MOD_NAME + " error: " + msg);
                 
-                MyLog.Default.WriteLineAndConsole(text);
+                string text = MOD_NAME + " error - open %AppData%/SpaceEngineers/Storage/" + MyAPIGateway.Session.WorkshopId + "_" + MOD_NAME + "/" + LOG_FILE + " for details";
                 
                 if(notify == null)
                 {
