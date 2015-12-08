@@ -669,7 +669,7 @@ namespace Digi.Helmet
 				// append the oxygen level number to the name and remove the previous entity if changed
 				if(id == Icons.OXYGEN_ENV)
 				{
-					int oxygenEnv = Math.Min(Math.Max((int)Math.Round(percent), 0), 2);
+					int oxygenEnv = MathHelper.Clamp((int)percent, 0, 2);
 					
 					if(iconEntities[id] != null && lastOxygenEnv != oxygenEnv)
 					{
@@ -695,7 +695,7 @@ namespace Digi.Helmet
 						// append the oxygen level number to the name and remove the previous entity if changed
 						if(id == Icons.OXYGEN_ENV)
 						{
-							int oxygenEnv = Math.Min(Math.Max((int)Math.Round(percent), 0), 2);
+							int oxygenEnv = MathHelper.Clamp((int)percent, 0, 2);
 							name += oxygenEnv.ToString();
 						}
 						
@@ -1034,8 +1034,8 @@ namespace Digi.Helmet
 							
 							bool cubeBuilder = MyAPIGateway.CubeBuilder.IsActivated;
 							bool buildTool = false;
-							bool drill = false;
-							bool weapon = false;
+							bool handDrill = false;
+							bool handWeapon = false;
 							
 							if(!cubeBuilder && !inShip && holdingTool != null)
 							{
@@ -1048,9 +1048,9 @@ namespace Digi.Helmet
 									if(holdingToolId.TypeId == typeof(MyObjectBuilder_Welder) || holdingToolId.TypeId == typeof(MyObjectBuilder_AngleGrinder))
 										buildTool = true;
 									else if(holdingToolId.TypeId == typeof(MyObjectBuilder_HandDrill))
-										drill = true;
+										handDrill = true;
 									else if(holdingToolId.TypeId == typeof(MyObjectBuilder_AutomaticRifle))
-										weapon = true;
+										handWeapon = true;
 								}
 							}
 							
@@ -1104,7 +1104,7 @@ namespace Digi.Helmet
 											}
 											
 											if(componentsCount > max)
-												str.Append(" +").Append(components.Count - 3).Append(" other...").AppendLine();
+												str.Append(" +").Append(componentsCount - 3).Append(" other...").AppendLine();
 											
 											components.Clear();
 										}
@@ -1115,11 +1115,11 @@ namespace Digi.Helmet
 									str.Append("Waiting for selection...").AppendLine();
 								}
 							}
-							else if(drill)
+							else if(handDrill)
 							{
 								str.Append("Ore in range: ").Append(MyHud.OreMarkers.Count()).AppendLine();
 							}
-							else if(weapon)
+							else if(handWeapon)
 							{
 								var obj = holdingTool.GetObjectBuilder(false) as MyObjectBuilder_AutomaticRifle;
 								var physDef = MyDefinitionManager.Static.GetPhysicalItemForHandItem(obj.GetId());
@@ -1181,182 +1181,462 @@ namespace Digi.Helmet
 								
 								if(controlled != null)
 								{
-									var blockName = controlled.CustomName.ToLower();
+									var toolbarObj = (controlled as IMyCubeBlock).GetObjectBuilderCubeBlock(false) as MyObjectBuilder_ShipController;
+									var grid = controlled.CubeGrid as IMyCubeGrid;
 									
-									if(blockName.Contains("ores"))
+									if(toolbarObj.Toolbar != null && toolbarObj.Toolbar.SelectedSlot.HasValue)
 									{
-										str.Append("Ore in range: ").Append(MyHud.OreMarkers.Count()).AppendLine();
+										var item = toolbarObj.Toolbar.Slots[toolbarObj.Toolbar.SelectedSlot.Value];
+										
+										if(item.Data is MyObjectBuilder_ToolbarItemWeapon)
+										{
+											var weapon = item.Data as MyObjectBuilder_ToolbarItemWeapon;
+											bool shipWelder = weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_ShipWelder);
+											
+											if(shipWelder || weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_ShipGrinder))
+											{
+												blocks.Clear();
+												grid.GetBlocks(blocks, b => b.FatBlock != null);
+												
+												float cargo = 0;
+												float cargoMax = 0;
+												float cargoMass = 0;
+												int tools = 0;
+												MyInventory inv;
+												
+												foreach(var slim in blocks)
+												{
+													if(shipWelder ? slim.FatBlock is Ingame.IMyShipWelder : slim.FatBlock is Ingame.IMyShipGrinder)
+													{
+														tools++;
+														
+														if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+														{
+															cargo += (float)inv.CurrentVolume;
+															cargoMax += (float)inv.MaxVolume;
+															cargoMass += (float)inv.CurrentMass;
+														}
+													}
+												}
+												
+												str.Append(tools).Append("x ").Append(shipWelder ? "welders" : "grinders").Append(": ").Append(Math.Round((cargo / cargoMax) * 100, 2)).Append("% (").Append(cargoMass.ToString(NUMBER_FORMAT)).Append(" kg)").AppendLine();
+												
+												var targetGrid = MyAPIGateway.CubeBuilder.FindClosestGrid();
+												
+												if(targetGrid != null)
+												{
+													var view = MyAPIGateway.Session.ControlledObject.GetHeadMatrix(true, true);
+													var rayFrom = view.Translation + view.Forward * 2;
+													var rayTo = view.Translation + view.Forward * 10;
+													var blockPos = targetGrid.RayCastBlocks(rayFrom, rayTo);
+													
+													if(blockPos.HasValue)
+													{
+														var slimBlock = targetGrid.GetCubeBlock(blockPos.Value);
+														
+														if(slimBlock == null)
+														{
+															Log.Error("Unexpected empty block slot at " + blockPos.Value);
+															return;
+														}
+														
+														var block = slimBlock.FatBlock;
+														MyObjectBuilder_CubeBlock obj = null;
+														MyCubeBlockDefinition def;
+														MyDefinitionId defId;
+														
+														if(block == null)
+														{
+															obj = slimBlock.GetObjectBuilder();
+															defId = obj.GetId();
+														}
+														else
+														{
+															defId = block.BlockDefinition;
+														}
+														
+														if(MyDefinitionManager.Static.TryGetCubeBlockDefinition(defId, out def))
+														{
+															if(block is IMyTerminalBlock)
+																str.Append("\"").Append((block as IMyTerminalBlock).CustomName).Append("\"").AppendLine();
+															else
+																str.Append(def.DisplayNameText).AppendLine();
+															
+															str.Append("Integrity: "+Math.Round((slimBlock.BuildIntegrity / slimBlock.MaxIntegrity) * 100, 2)+"% ("+Math.Round(def.CriticalIntegrityRatio * 100, 0)+"% / "+Math.Round(def.OwnershipIntegrityRatio * 100, 0)+"%)").AppendLine();
+															
+															Dictionary<string, int> missing = new Dictionary<string, int>();
+															slimBlock.GetMissingComponents(missing);
+															int missingCount = missing.Count;
+															
+															if(missingCount > 0)
+															{
+																int max = 3;
+																int line = 0;
+																
+																foreach(var comp in missing)
+																{
+																	str.Append("  ").Append(comp.Value).Append("x ").Append(comp.Key).AppendLine();
+																	
+																	if(++line >= max)
+																		break;
+																}
+																
+																//if(missingCount > max)
+																//	str.Append(" +").Append(missingCount - 3).Append(" other...").AppendLine();
+															}
+															else
+															{
+																str.Append("  No missing components.").AppendLine();
+															}
+														}
+														else
+														{
+															str.Append("ERROR: No definition for block").AppendLine();
+														}
+													}
+													else
+													{
+														str.Append("Aim at a block to inspect it.").AppendLine();
+													}
+												}
+												else
+												{
+													str.Append("Aim at a block to inspect it.").AppendLine();
+												}
+											}
+											else if(weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_SmallGatlingGun))
+											{
+												blocks.Clear();
+												grid.GetBlocks(blocks, b => b.FatBlock != null);
+												
+												float gatlingAmmo = 0;
+												float containerAmmo = 0;
+												int gatlingGuns = 0;
+												MyInventory inv;
+												MyAmmoMagazineDefinition magDef = null;
+												
+												foreach(var slim in blocks)
+												{
+													if(slim.FatBlock is Ingame.IMySmallGatlingGun)
+													{
+														var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallGatlingGun;
+														var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
+														var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
+														var currentMag = obj.GunBase.CurrentAmmoMagazineName;
+														var types = wepDef.AmmoMagazinesId.Length;
+														
+														gatlingGuns++;
+														gatlingAmmo += obj.GunBase.RemainingAmmo;
+														
+														for(int i = 0; i < types; i++)
+														{
+															var magId = wepDef.AmmoMagazinesId[i];
+															
+															if(magId.SubtypeName == currentMag)
+															{
+																magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
+																
+																if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+																	gatlingAmmo += (int)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+																
+																break;
+															}
+														}
+													}
+												}
+												
+												foreach(var slim in blocks)
+												{
+													if(slim.FatBlock is Ingame.IMyCargoContainer)
+													{
+														if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+														{
+															containerAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+														}
+													}
+												}
+												
+												str.Append(gatlingGuns).Append("x gatling guns: ").Append((int)gatlingAmmo).AppendLine();
+												str.Append("Ammo in containers: ").Append((int)containerAmmo).AppendLine();
+											}
+											else if(weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_SmallMissileLauncher) || weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_SmallMissileLauncherReload))
+											{
+												bool reloadable = weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_SmallMissileLauncherReload);
+												
+												blocks.Clear();
+												grid.GetBlocks(blocks, b => b.FatBlock != null);
+												
+												int launchers = 0;
+												float launcherAmmo = 0;
+												float containerAmmo = 0;
+												MyInventory inv;
+												MyAmmoMagazineDefinition magDef = null;
+												
+												foreach(var slim in blocks)
+												{
+													if(slim.FatBlock is Ingame.IMySmallMissileLauncher && (reloadable == slim.FatBlock is Ingame.IMySmallMissileLauncherReload))
+													{
+														var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallMissileLauncher;
+														var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
+														var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
+														var currentMag = obj.GunBase.CurrentAmmoMagazineName;
+														var types = wepDef.AmmoMagazinesId.Length;
+														
+														launchers++;
+														launcherAmmo += obj.GunBase.RemainingAmmo;
+														
+														for(int i = 0; i < types; i++)
+														{
+															var magId = wepDef.AmmoMagazinesId[i];
+															
+															if(magId.SubtypeName == currentMag)
+															{
+																magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
+																
+																if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+																	launcherAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+																
+																break;
+															}
+														}
+													}
+												}
+												
+												foreach(var slim in blocks)
+												{
+													if(slim.FatBlock is Ingame.IMyCargoContainer)
+													{
+														if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+														{
+															containerAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+														}
+													}
+												}
+												
+												str.Append(launchers).Append("x missile launchers: ").Append((int)launcherAmmo).AppendLine();
+												str.Append("Ammo in containers: ").Append((int)containerAmmo).AppendLine();
+											}
+											else if(weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_Drill))
+											{
+												blocks.Clear();
+												grid.GetBlocks(blocks, b => b.FatBlock != null);
+												
+												float cargo = 0;
+												float cargoMax = 0;
+												float cargoMass = 0;
+												int containers = 0;
+												float drillVol = 0;
+												float drillVolMax = 0;
+												float drillMass = 0;
+												int drills = 0;
+												MyInventory inv;
+												
+												foreach(var slim in blocks)
+												{
+													if(slim.FatBlock is Ingame.IMyShipDrill)
+													{
+														drills++;
+														
+														if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+														{
+															drillVol += (float)inv.CurrentVolume;
+															drillVolMax += (float)inv.MaxVolume;
+															drillMass += (float)inv.CurrentMass;
+														}
+													}
+													else if(slim.FatBlock is Ingame.IMyCargoContainer)
+													{
+														containers++;
+														
+														if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+														{
+															cargo += (float)inv.CurrentVolume;
+															cargoMax += (float)inv.MaxVolume;
+															cargoMass += (float)inv.CurrentMass;
+														}
+													}
+												}
+												
+												str.Append(drills).Append("x drills: ").Append(Math.Round((drillVol / drillVolMax) * 100, 2)).Append("% (").Append(drillMass.ToString(NUMBER_FORMAT)).Append(" kg)").AppendLine();
+												str.Append(containers).Append("x containers: ").Append(Math.Round((cargo / cargoMax) * 100, 2)).Append("% (").Append(cargoMass.ToString(NUMBER_FORMAT)).Append(" kg)").AppendLine();
+											}
+										}
 									}
-									
-									// TODO selected toolbar item stats instead?
-									
-									bool showGatling = blockName.Contains("gatling");
-									bool showLaunchers = blockName.Contains("launchers");
-									bool showAmmo = blockName.Contains("ammo");
-									bool showCargo = blockName.Contains("cargo");
-									bool showOxygen = blockName.Contains("oxygen");
-									bool showHydrogen = blockName.Contains("hydrogen");
-									
-									if(showGatling || showLaunchers || showAmmo || showCargo || showOxygen || showHydrogen)
+									else
 									{
-										var grid = controlled.CubeGrid as IMyCubeGrid;
+										var blockName = controlled.CustomName.ToLower();
 										
-										blocks.Clear();
-										grid.GetBlocks(blocks, b => b.FatBlock != null);
-										
-										float cargo = 0;
-										float totalCargo = 0;
-										float cargoMass = 0;
-										int containers = 0;
-										float mags = 0;
-										int bullets = 0;
-										float missiles = 0;
-										
-										float oxygen = 0;
-										int oxygenTanks = 0;
-										
-										float hydrogen = 0;
-										int hydrogenTanks = 0;
-										
-										int gatlingGuns = 0;
-										float gatlingAmmo = 0;
-										
-										int launchers = 0;
-										float launchersAmmo = 0;
-										
-										MyInventory inv;
-										
-										foreach(var slim in blocks)
+										if(blockName.Contains("ores"))
 										{
-											if(showGatling && slim.FatBlock is Ingame.IMySmallGatlingGun)
+											str.Append("Ore in range: ").Append(MyHud.OreMarkers.Count()).AppendLine();
+										}
+										
+										bool showGatling = false; //blockName.Contains("gatling");
+										bool showLaunchers = false; //blockName.Contains("launchers");
+										bool showAmmo = false; //blockName.Contains("ammo");
+										bool showCargo = blockName.Contains("cargo");
+										bool showOxygen = blockName.Contains("oxygen");
+										bool showHydrogen = blockName.Contains("hydrogen");
+										
+										if(showGatling || showLaunchers || showAmmo || showCargo || showOxygen || showHydrogen)
+										{
+											blocks.Clear();
+											grid.GetBlocks(blocks, b => b.FatBlock != null);
+											
+											float cargo = 0;
+											float totalCargo = 0;
+											float cargoMass = 0;
+											int containers = 0;
+											float mags = 0;
+											int bullets = 0;
+											float missiles = 0;
+											
+											float oxygen = 0;
+											int oxygenTanks = 0;
+											
+											float hydrogen = 0;
+											int hydrogenTanks = 0;
+											
+											int gatlingGuns = 0;
+											float gatlingAmmo = 0;
+											
+											int launchers = 0;
+											float launchersAmmo = 0;
+											
+											MyInventory inv;
+											
+											foreach(var slim in blocks)
 											{
-												var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallGatlingGun;
-												var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
-												var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
-												var currentMag = obj.GunBase.CurrentAmmoMagazineName;
-												var types = wepDef.AmmoMagazinesId.Length;
-												
-												gatlingGuns++;
-												gatlingAmmo += obj.GunBase.RemainingAmmo;
-												
-												for(int i = 0; i < types; i++)
+												if(showGatling && slim.FatBlock is Ingame.IMySmallGatlingGun)
 												{
-													var magId = wepDef.AmmoMagazinesId[i];
+													var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallGatlingGun;
+													var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
+													var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
+													var currentMag = obj.GunBase.CurrentAmmoMagazineName;
+													var types = wepDef.AmmoMagazinesId.Length;
 													
-													if(magId.SubtypeName == currentMag)
+													gatlingGuns++;
+													gatlingAmmo += obj.GunBase.RemainingAmmo;
+													
+													for(int i = 0; i < types; i++)
 													{
-														var magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
+														var magId = wepDef.AmmoMagazinesId[i];
 														
-														if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-															gatlingAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+														if(magId.SubtypeName == currentMag)
+														{
+															var magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
+															
+															if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+																gatlingAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+															
+															break;
+														}
+													}
+												}
+												else if(showLaunchers && slim.FatBlock is Ingame.IMySmallMissileLauncher)
+												{
+													var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallMissileLauncher;
+													var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
+													var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
+													var currentMag = obj.GunBase.CurrentAmmoMagazineName;
+													var types = wepDef.AmmoMagazinesId.Length;
+													
+													launchers++;
+													launchersAmmo += obj.GunBase.RemainingAmmo;
+													
+													for(int i = 0; i < types; i++)
+													{
+														var magId = wepDef.AmmoMagazinesId[i];
 														
-														break;
+														if(magId.SubtypeName == currentMag)
+														{
+															var magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
+															
+															if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+																launchersAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+															
+															break;
+														}
+													}
+												}
+												else if(showCargo && slim.FatBlock is Ingame.IMyCargoContainer)
+												{
+													if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+													{
+														cargo += (float)inv.CurrentVolume;
+														totalCargo += (float)inv.MaxVolume;
+														cargoMass += (float)inv.CurrentMass;
+														containers++;
+													}
+												}
+												else if(showAmmo && (slim.FatBlock is Ingame.IMyLargeTurretBase || slim.FatBlock is Ingame.IMySmallGatlingGun || slim.FatBlock is Ingame.IMyCargoContainer))
+												{
+													if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+													{
+														mags += (float)inv.GetItemAmount(AMMO_BULLETS.GetId(), MyItemFlags.None);
+														missiles += (float)inv.GetItemAmount(AMMO_MISSILES.GetId(), MyItemFlags.None);
+													}
+												}
+												else if((showOxygen || showHydrogen) && slim.FatBlock is Ingame.IMyOxygenTank)
+												{
+													var tank = slim.FatBlock as Ingame.IMyOxygenTank;
+													var def = MyDefinitionManager.Static.GetCubeBlockDefinition(tank.BlockDefinition) as MyGasTankDefinition;
+													
+													if(showHydrogen && def.StoredGasId.SubtypeName == "Hydrogen")
+													{
+														hydrogen += tank.GetOxygenLevel();
+														hydrogenTanks += 1;
+													}
+													else if(showOxygen && def.StoredGasId.SubtypeName == "Oxygen")
+													{
+														oxygen += tank.GetOxygenLevel();
+														oxygenTanks += 1;
 													}
 												}
 											}
-											else if(showLaunchers && slim.FatBlock is Ingame.IMySmallMissileLauncher)
+											
+											if(showGatling)
 											{
-												var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallMissileLauncher;
-												var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
-												var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
-												var currentMag = obj.GunBase.CurrentAmmoMagazineName;
-												var types = wepDef.AmmoMagazinesId.Length;
-												
-												launchers++;
-												launchersAmmo += obj.GunBase.RemainingAmmo;
-												
-												for(int i = 0; i < types; i++)
-												{
-													var magId = wepDef.AmmoMagazinesId[i];
-													
-													if(magId.SubtypeName == currentMag)
-													{
-														var magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
-														
-														if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-															launchersAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
-														
-														break;
-													}
-												}
+												str.Append(gatlingGuns).Append("x Gatling Gun: ").Append(Math.Floor(gatlingAmmo)).AppendLine();
 											}
-											else if(showCargo && slim.FatBlock is Ingame.IMyCargoContainer)
+											
+											if(showLaunchers)
 											{
-												if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-												{
-													cargo += (float)inv.CurrentVolume;
-													totalCargo += (float)inv.MaxVolume;
-													cargoMass += (float)inv.CurrentMass;
-													containers++;
-												}
+												str.Append(launchers).Append("x Missile Launcher: ").Append(Math.Floor(launchersAmmo)).AppendLine();
 											}
-											else if(showAmmo && (slim.FatBlock is Ingame.IMyLargeTurretBase || slim.FatBlock is Ingame.IMySmallGatlingGun || slim.FatBlock is Ingame.IMyCargoContainer))
+											
+											if(showAmmo)
 											{
-												if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-												{
-													mags += (float)inv.GetItemAmount(AMMO_BULLETS.GetId(), MyItemFlags.None);
-													missiles += (float)inv.GetItemAmount(AMMO_MISSILES.GetId(), MyItemFlags.None);
-												}
+												str.Append(mags).Append("x 25x184 mags (").Append(bullets).Append(")").AppendLine();
+												str.Append(missiles).Append("x 200mm missiles").AppendLine();
 											}
-											else if((showOxygen || showHydrogen) && slim.FatBlock is Ingame.IMyOxygenTank)
+											
+											if(showCargo)
 											{
-												var tank = slim.FatBlock as Ingame.IMyOxygenTank;
-												var def = MyDefinitionManager.Static.GetCubeBlockDefinition(tank.BlockDefinition) as MyGasTankDefinition;
-												
-												if(showHydrogen && def.StoredGasId.SubtypeName == "Hydrogen")
-												{
-													hydrogen += tank.GetOxygenLevel();
-													hydrogenTanks += 1;
-												}
-												else if(showOxygen && def.StoredGasId.SubtypeName == "Oxygen")
-												{
-													oxygen += tank.GetOxygenLevel();
-													oxygenTanks += 1;
-												}
+												if(containers == 0)
+													str.Append("No cargo containers");
+												else
+													str.Append(containers).Append("x Container: ").Append(Math.Round((cargo / totalCargo) * 100f, 2)).Append("% (").Append(cargoMass.ToString(NUMBER_FORMAT)).Append("kg)");
+												str.AppendLine();
 											}
-										}
-										
-										if(showGatling)
-										{
-											str.Append(gatlingGuns).Append("x Gatling Gun: ").Append(Math.Floor(gatlingAmmo)).AppendLine();
-										}
-										
-										if(showLaunchers)
-										{
-											str.Append(launchers).Append("x Missile Launcher: ").Append(Math.Floor(launchersAmmo)).AppendLine();
-										}
-										
-										if(showAmmo)
-										{
-											str.Append(mags).Append("x 25x184 mags (").Append(bullets).Append(")").AppendLine();
-											str.Append(missiles).Append("x 200mm missiles").AppendLine();
-										}
-										
-										if(showCargo)
-										{
-											if(containers == 0)
-												str.Append("No cargo containers");
-											else
-												str.Append(containers).Append("x Container: ").Append(Math.Round((cargo / totalCargo) * 100f, 2)).Append("% (").Append(cargoMass).Append("kg)");
-											str.AppendLine();
-										}
-										
-										if(showOxygen)
-										{
-											if(oxygenTanks == 0)
-												str.Append("No oxygen tanks.");
-											else
-												str.Append(oxygenTanks).Append("x Oxygen tank: ").Append(Math.Round((oxygen / oxygenTanks) * 100f, 2)).Append("%");
-											str.AppendLine();
-										}
-										
-										if(showHydrogen)
-										{
-											if(hydrogenTanks == 0)
-												str.Append("No hydrogen tanks");
-											else
-												str.Append(hydrogenTanks).Append("x Hydrogen tank: ").Append(Math.Round((hydrogen / hydrogenTanks) * 100f, 2)).Append("%");
-											str.AppendLine();
+											
+											if(showOxygen)
+											{
+												if(oxygenTanks == 0)
+													str.Append("No oxygen tanks.");
+												else
+													str.Append(oxygenTanks).Append("x Oxygen tank: ").Append(Math.Round((oxygen / oxygenTanks) * 100f, 2)).Append("%");
+												str.AppendLine();
+											}
+											
+											if(showHydrogen)
+											{
+												if(hydrogenTanks == 0)
+													str.Append("No hydrogen tanks");
+												else
+													str.Append(hydrogenTanks).Append("x Hydrogen tank: ").Append(Math.Round((hydrogen / hydrogenTanks) * 100f, 2)).Append("%");
+												str.AppendLine();
+											}
 										}
 									}
 								}
