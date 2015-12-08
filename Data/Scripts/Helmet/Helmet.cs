@@ -666,42 +666,50 @@ namespace Digi.Helmet
 					return; // and STOP!
 				}
 				
+				// append the oxygen level number to the name and remove the previous entity if changed
+				if(id == Icons.OXYGEN_ENV)
+				{
+					int oxygenEnv = Math.Min(Math.Max((int)Math.Round(percent), 0), 2);
+					
+					if(iconEntities[id] != null && lastOxygenEnv != oxygenEnv)
+					{
+						iconEntities[id].Close();
+						iconEntities[id] = null;
+					}
+					
+					lastOxygenEnv = oxygenEnv;
+				}
+				
 				// spawn the element if it's not already
 				if(iconEntities[id] == null)
 				{
-					string name = element.name;
-					
-					// append the oxygen level number to the name and remove the previous entity if changed
-					if(id == Icons.OXYGEN_ENV)
-					{
-						int oxygenEnv = Math.Min(Math.Max((int)Math.Round(percent), 0), 2);
-						
-						if(iconEntities[id] != null && lastOxygenEnv != oxygenEnv)
-						{
-							iconEntities[id].Close();
-							iconEntities[id] = null;
-						}
-						
-						lastOxygenEnv = oxygenEnv;
-						name += oxygenEnv.ToString();
-					}
-					
-					// set the gravity icon type and update the gravity direction
-					if(id == Icons.GRAVITY)
-					{
-						if(gravitySources == 0)
-							name += "None";
-						else
-							name += "Dir";
-					}
-					
 					if(id == Icons.DISPLAY)
 					{
-						iconEntities[id] = SpawnPrefab(CUBE_HUD_PREFIX + name + (settings.displayQuality == 0 ? "Low" : ""), true);
+						iconEntities[id] = SpawnPrefab(CUBE_HUD_PREFIX + element.name + (settings.displayQuality == 0 ? "Low" : ""), true);
 						lastDisplayText = null; // force first write
 					}
 					else
+					{
+						string name = element.name;
+						
+						// append the oxygen level number to the name and remove the previous entity if changed
+						if(id == Icons.OXYGEN_ENV)
+						{
+							int oxygenEnv = Math.Min(Math.Max((int)Math.Round(percent), 0), 2);
+							name += oxygenEnv.ToString();
+						}
+						
+						// set the gravity icon type and update the gravity direction
+						if(id == Icons.GRAVITY)
+						{
+							if(gravitySources == 0)
+								name += "None";
+							else
+								name += "Dir";
+						}
+						
 						iconEntities[id] = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HUD_PREFIX + name);
+					}
 					
 					if(iconEntities[id] == null)
 						return;
