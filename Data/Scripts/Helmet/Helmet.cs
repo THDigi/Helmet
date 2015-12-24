@@ -28,12 +28,6 @@ using VRage.Components;
 using VRage.Utils;
 using Digi.Utils;
 using Digi.Helmet;
-using IMyCockpit = Sandbox.ModAPI.Ingame.IMyCockpit;
-using IMyShipController = Sandbox.ModAPI.Ingame.IMyShipController;
-using IMyDestroyableObject = Sandbox.ModAPI.Interfaces.IMyDestroyableObject;
-using IMyGravityGenerator = Sandbox.ModAPI.Ingame.IMyGravityGenerator;
-using IMyGravityGeneratorBase = Sandbox.ModAPI.Ingame.IMyGravityGeneratorBase;
-using IMyGravityGeneratorSphere = Sandbox.ModAPI.Ingame.IMyGravityGeneratorSphere;
 using Ingame = Sandbox.ModAPI.Ingame;
 
 namespace Digi.Helmet
@@ -57,7 +51,7 @@ namespace Digi.Helmet
 		private float oldFov = 60;
 		//private int slowUpdateFov = 0;
 		
-		public static List<IMyGravityGeneratorBase> gravityGenerators = new List<IMyGravityGeneratorBase>();
+		public static List<Ingame.IMyGravityGeneratorBase> gravityGenerators = new List<Ingame.IMyGravityGeneratorBase>();
 		private Vector3 artificialDir = Vector3.Zero;
 		private Vector3 naturalDir = Vector3.Zero;
 		private Vector3 gravityDir = Vector3.Zero;
@@ -243,17 +237,6 @@ namespace Digi.Helmet
 			
 			tick++; // global update tick
 			
-			if(settings.reminder)
-			{
-				long now = DateTime.UtcNow.Ticks;
-				
-				if(now > (lastReminder + (TimeSpan.TicksPerSecond * 60)))
-				{
-					MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Type /helmet in chat to configure your helmet (will also remove this notice permanently)");
-					lastReminder = now;
-				}
-			}
-			
 			if(characterEntity != null)
 			{
 				if(characterEntity.MarkedForClose || characterEntity.Closed)
@@ -288,7 +271,7 @@ namespace Digi.Helmet
 					characterEntity = camera as IMyEntity;
 					attach = true;
 				}
-				else if(contrEnt is IMyShipController && camera is IMyShipController)
+				else if(contrEnt is Ingame.IMyShipController && camera is Ingame.IMyShipController)
 				{
 					if(characterEntity == null && contrEnt.Hierarchy.Children.Count > 0)
 					{
@@ -394,12 +377,14 @@ namespace Digi.Helmet
 				
 				bool helmetOn = (characterEntity as Sandbox.ModAPI.Interfaces.IMyControllableEntity).EnabledHelmet;
 				
-				if(firstHelmetSpawn)
+				if(firstHelmetSpawn) // first time the helmet is spawned this session
 				{
-					firstHelmetSpawn = false;
+					firstHelmetSpawn = false; // only do it once
 					
-					if(settings.hydrogenUpdateReset)
-						MyAPIGateway.Utilities.ShowMissionScreen("Helmet mod update", "", "TL;DR: Running DX11 ? Type in chat: /helmet dx11", "\nThe mod now has individual tweaks for DX9 and DX11 and because it can't detect what you're running it's set for DX9 by default.\n\nIf you're running DX11 type /helmet dx11 in chat!\n\nAlso there's a new LCD screen if you hide the vanilla HUD!\n\n\n\nFor the full changelog visit the workshop page: http://steamcommunity.com/sharedfiles/filedetails/?id=428842256 (or just search for 'helmet' in the Space Engineers Steam workshop).", null, "Close");
+					if(settings.firstLoad)
+					{
+						MyAPIGateway.Utilities.ShowMissionScreen("Helmet mod", "", "TL;DR: Running DX11 ? Type in chat: /helmet dx11", "\nThe mod has individual tweaks for DX9 and DX11, because it can't detect what you're running it's set for DX9 by default.\n\nIf you're running DX11 type /helmet dx11 in chat!", null, "Close");
+					}
 				}
 				
 				bool brokenHelmet = (helmetBroken > 0 && helmetBroken == characterEntity.EntityId);
@@ -832,7 +817,7 @@ namespace Digi.Helmet
 						else try
 						{
 							bool inShip = MyHud.ShipInfo.Visible;
-							float speed = 0; // (float)Math.Round((inShip ? MyHud.ShipInfo.Speed : MyHud.CharacterInfo.Speed), 2);
+							float speed = 0;
 							float accel = 0;
 							char accelSymbol = '-';
 							int battery = (int)MyHud.CharacterInfo.BatteryEnergy;
@@ -1777,30 +1762,48 @@ namespace Digi.Helmet
 		{
 			try
 			{
+				PrefabBuilder.CubeBlocks.Clear(); // need no leftovers from previous spawns
+				
 				if(isDisplay)
 				{
-					PrefabBuilder.CubeBlocks[0] = new MyObjectBuilder_TextPanel()
-					{
-						EntityId = 1,
-						SubtypeName = name,
-						Min = PrefabVectorI0,
-						BlockOrientation = PrefabOrientation,
-						ShareMode = MyOwnershipShareModeEnum.None,
-						DeformationRatio = 0,
-						ShowOnHUD = false,
-						ShowText = ShowTextOnScreenFlag.PUBLIC,
-						FontSize = DISPLAY_FONT_SIZE,
-						FontColor = settings.displayFontColor,
-						BackgroundColor = settings.displayBgColor,
-					};
+					Vector3 borderColor = Vector3.Zero;
 					
-					if(characterEntity != null)
-						PrefabBuilder.CubeBlocks[0].ColorMaskHSV = characterEntity.Render.ColorMaskHsv;
+					if(settings.displayBorderColor.HasValue)
+						borderColor = settings.displayBorderColor.Value;
+					else if(characterEntity != null)
+						borderColor = characterEntity.Render.ColorMaskHsv;
+					
+					PrefabBuilder.CubeBlocks.Add(new MyObjectBuilder_TextPanel()
+					                             {
+					                             	EntityId = 1,
+					                             	SubtypeName = name,
+					                             	Min = PrefabVectorI0,
+					                             	BlockOrientation = PrefabOrientation,
+					                             	ShareMode = MyOwnershipShareModeEnum.None,
+					                             	DeformationRatio = 0,
+					                             	ShowOnHUD = false,
+					                             	ShowText = ShowTextOnScreenFlag.PUBLIC,
+					                             	FontSize = DISPLAY_FONT_SIZE,
+					                             	FontColor = settings.displayFontColor,
+					                             	BackgroundColor = settings.displayBgColor,
+					                             	ColorMaskHSV = borderColor,
+					                             });
 					
 					PrefabBuilder.CubeBlocks.Add(PrefabBattery);
 				}
 				else
-					PrefabBuilder.CubeBlocks[0].SubtypeName = name;
+				{
+					PrefabBuilder.CubeBlocks.Add(new MyObjectBuilder_TerminalBlock()
+					                             {
+					                             	EntityId = 1,
+					                             	SubtypeName = name,
+					                             	Min = PrefabVectorI0,
+					                             	BlockOrientation = PrefabOrientation,
+					                             	ShareMode = MyOwnershipShareModeEnum.None,
+					                             	DeformationRatio = 0,
+					                             	ShowOnHUD = false,
+					                             });
+				}
 				
 				MyAPIGateway.Entities.RemapObjectBuilder(PrefabBuilder);
 				var ent = MyAPIGateway.Entities.CreateFromObjectBuilder(PrefabBuilder);
@@ -1847,19 +1850,7 @@ namespace Digi.Helmet
 			DisplayName = "",
 			CreatePhysics = false,
 			PositionAndOrientation = new MyPositionAndOrientation(Vector3D.Zero, Vector3D.Forward, Vector3D.Up),
-			CubeBlocks = new List<MyObjectBuilder_CubeBlock>()
-			{
-				new MyObjectBuilder_TerminalBlock()
-				{
-					EntityId = 1,
-					SubtypeName = "",
-					Min = PrefabVectorI0,
-					BlockOrientation = PrefabOrientation,
-					ShareMode = MyOwnershipShareModeEnum.None,
-					DeformationRatio = 0,
-					ShowOnHUD = false,
-				}
-			}
+			CubeBlocks = new List<MyObjectBuilder_CubeBlock>(),
 		};
 		private static MyObjectBuilder_BatteryBlock PrefabBattery = new MyObjectBuilder_BatteryBlock()
 		{
@@ -1908,9 +1899,9 @@ namespace Digi.Helmet
 				{
 					if(generator.IsWorking)
 					{
-						if(generator is IMyGravityGeneratorSphere)
+						if(generator is Ingame.IMyGravityGeneratorSphere)
 						{
-							var gen = (generator as IMyGravityGeneratorSphere);
+							var gen = (generator as Ingame.IMyGravityGeneratorSphere);
 							
 							if(Vector3D.DistanceSquared(generator.WorldMatrix.Translation, point) <= (gen.Radius * gen.Radius))
 							{
@@ -1920,9 +1911,9 @@ namespace Digi.Helmet
 								gravitySources++;
 							}
 						}
-						else if(generator is IMyGravityGenerator)
+						else if(generator is Ingame.IMyGravityGenerator)
 						{
-							var gen = (generator as IMyGravityGenerator);
+							var gen = (generator as Ingame.IMyGravityGenerator);
 							
 							var halfExtents = new Vector3(gen.FieldWidth / 2, gen.FieldHeight / 2, gen.FieldDepth / 2);
 							var box = new MyOrientedBoundingBoxD(gen.WorldMatrix.Translation, halfExtents, Quaternion.CreateFromRotationMatrix(gen.WorldMatrix));
@@ -1951,12 +1942,6 @@ namespace Digi.Helmet
 		{
 			if(!msg.StartsWith("/helmet", StringComparison.InvariantCultureIgnoreCase))
 				return;
-			
-			if(settings.reminder)
-			{
-				settings.reminder = false;
-				settings.Save();
-			}
 			
 			visible = false;
 			msg = msg.Substring("/helmet".Length).Trim().ToLower();
@@ -2149,11 +2134,11 @@ namespace Digi.Helmet
 			
 			// find existing gravity generators
 			List<IMySlimBlock> blocks = new List<IMySlimBlock>();
-			grid.GetBlocks(blocks, b => b.FatBlock is IMyGravityGeneratorBase);
+			grid.GetBlocks(blocks, b => b.FatBlock is Ingame.IMyGravityGeneratorBase);
 			
 			foreach(var slimBlock in blocks)
 			{
-				Helmet.gravityGenerators.Add(slimBlock.FatBlock as IMyGravityGeneratorBase);
+				Helmet.gravityGenerators.Add(slimBlock.FatBlock as Ingame.IMyGravityGeneratorBase);
 			}
 			
 			// monitor generator adding/removing
@@ -2163,17 +2148,17 @@ namespace Digi.Helmet
 		
 		public void BlockAdded(IMySlimBlock slimBlock)
 		{
-			if(slimBlock.FatBlock is IMyGravityGeneratorBase)
+			if(slimBlock.FatBlock is Ingame.IMyGravityGeneratorBase)
 			{
-				Helmet.gravityGenerators.Add(slimBlock.FatBlock as IMyGravityGeneratorBase);
+				Helmet.gravityGenerators.Add(slimBlock.FatBlock as Ingame.IMyGravityGeneratorBase);
 			}
 		}
 		
 		public void BlockRemoved(IMySlimBlock slimBlock)
 		{
-			if(slimBlock.FatBlock is IMyGravityGeneratorBase)
+			if(slimBlock.FatBlock is Ingame.IMyGravityGeneratorBase)
 			{
-				Helmet.gravityGenerators.Remove(slimBlock.FatBlock as IMyGravityGeneratorBase);
+				Helmet.gravityGenerators.Remove(slimBlock.FatBlock as Ingame.IMyGravityGeneratorBase);
 			}
 		}
 		

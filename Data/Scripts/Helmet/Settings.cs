@@ -99,7 +99,6 @@ namespace Digi.Helmet
 		public double hudScale = 0.0f;
 		public float warnBlinkTime = 0.25f;
 		public float delayedRotation = 0.5f;
-		public bool reminder = true;
 		
 		public int displayUpdateRate = 20;
 		public int displayQuality = 1;
@@ -144,35 +143,26 @@ namespace Digi.Helmet
 		
 		private static char[] CHARS = new char[] { '=' };
 		
-		public bool hydrogenUpdateReset = true; // HACK remove after some time
+		public bool firstLoad = false;
 		
 		public Settings()
 		{
-			ResetHUDElements();
-			
-			// load the settings if they exist
-			if(!Load())
-			{
-				// if not, automatically set the scale according to player's FOV
-				ScaleForFOV(MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView));
-			}
-			else if(hydrogenUpdateReset)
-			{
-				ResetHUDElements();
-				Log.Info("HUD elements in config were reset due to a redesign, everything else is untouched");
-			}
-			
-			Save(); // refresh config in case of any missing or extra settings
-		}
-		
-		public void ResetHUDElements()
-		{
+			// copy defaults over to the usable element data
 			elements = new HudElement[TOTAL_ELEMENTS];
 			
 			for(int i = 0; i < TOTAL_ELEMENTS; i++)
 			{
 				elements[i] = defaultElements[i].Copy();
 			}
+			
+			// load the settings if they exist
+			if(!Load())
+			{
+				firstLoad = true; // config didn't exist, assume it's the first time the mod is loaded
+				ScaleForFOV(MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView)); // automatically set the scale according to player's FOV
+			}
+			
+			Save(); // refresh config in case of any missing or extra settings
 		}
 		
 		public bool Load()
@@ -422,21 +412,12 @@ namespace Digi.Helmet
 								else
 									Log.Error("Invalid "+args[0]+" value: " + args[1]);
 								continue;
-							case "reminder":
-								if(bool.TryParse(args[1], out b))
-									reminder = b;
-								else
-									Log.Error("Invalid "+args[0]+" value: " + args[1]);
-								continue;
 						}
 						
 						for(int id = 0; id < TOTAL_ELEMENTS; id++)
 						{
 							if(args[0] == elements[id].name)
 							{
-								if(id == Icons.HYDROGEN)
-									hydrogenUpdateReset = false;
-								
 								currentId = id;
 								lookForIndentation = true;
 								
@@ -527,22 +508,23 @@ namespace Digi.Helmet
 			for(int id = 0; id < TOTAL_ELEMENTS; id++)
 			{
 				var element = elements[id];
+				var defaultElement = defaultElements[id];
 				
 				str.Append(element.name).Append("=").Append(element.show).AppendLine(comments ? " // display this element or not" : "");
 				
 				if(id != Icons.HORIZON)
 				{
-					str.Append("  up=").Append(element.posUp).AppendLine(comments ? " // position from the center towards up, use negative values for down" : "");
-					str.Append("  left=").Append(element.posLeft).AppendLine(comments ? " // position from the center towards left, use negative values for right" : "");
+					str.Append("  up=").Append(element.posUp).AppendLine(comments ? " // position from the center towards up, use negative values for down; default: "+defaultElement.posUp : "");
+					str.Append("  left=").Append(element.posLeft).AppendLine(comments ? " // position from the center towards left, use negative values for right; default: "+defaultElement.posLeft : "");
 				}
 				
-				str.Append("  hudmode=").Append(element.hudMode).AppendLine(comments ? " // shows icon depending on the vanilla HUD's state: 0 = any, 1 = only when visible, 2 = only when hidden" : "");
+				str.Append("  hudmode=").Append(element.hudMode).AppendLine(comments ? " // shows icon depending on the vanilla HUD's state: 0 = any, 1 = only when visible, 2 = only when hidden; default: "+defaultElement.hudMode : "");
 				
 				if(id != Icons.HORIZON)
 				{
 					if(id == Icons.DISPLAY)
 					{
-						str.Append("  updaterate=").Append(displayUpdateRate).AppendLine(comments ? " // updates per second, 1 to 60, default 20 (depends on simulation speed)" : "");
+						str.Append("  updaterate=").Append(displayUpdateRate).AppendLine(comments ? " // updates per second, 1 to 60 (depends on simulation speed), default 20" : "");
 						str.Append("  quality=").Append(displayQuality).AppendLine(comments ? " // texture size and model detail, default 1 (512x512 with details), set to 0 for 256x256 without model details" : "");
 						str.Append("  fontcolor=").Append(displayFontColor.R).Append(",").Append(displayFontColor.G).Append(",").Append(displayFontColor.B).AppendLine(comments ? " // text color in R,G,B format, default 151,226,255" : "");
 						str.Append("  bgcolor=").Append(displayBgColor.R).Append(",").Append(displayBgColor.G).Append(",").Append(displayBgColor.B).AppendLine(comments ? " // background color in R,G,B format, default 1,2,3" : "");
@@ -557,18 +539,13 @@ namespace Digi.Helmet
 						str.Append("  speedunit=").Append(displaySpeedUnit).AppendLine(comments ? " // unit displayed for speed, options: "+String.Join(", ", Enum.GetNames(typeof(SpeedUnits))) : "");
 					}
 					
-					if(element.warnPercent > -1)
+					if(defaultElement.warnPercent > -1)
 					{
-						str.Append("  warnpercent=").Append(element.warnPercent).AppendLine(comments ? " // warning % for this statistic" : "");
-						str.Append("  warnmovemode=").Append(element.warnMoveMode).AppendLine(comments ? " // warning only shows in a mode: 0 = any, 1 = jetpack off, 2 = jetpack on" : "");
+						str.Append("  warnpercent=").Append(element.warnPercent).AppendLine(comments ? " // warning % for this statistic; default: "+defaultElement.warnPercent : "");
+						str.Append("  warnmovemode=").Append(element.warnMoveMode).AppendLine(comments ? " // warning only shows in a mode: 0 = any, 1 = jetpack off, 2 = jetpack on; default: "+defaultElement.warnMoveMode : "");
 					}
 				}
 			}
-			
-			if(comments)
-				str.AppendLine();
-			
-			str.AppendLine("reminder="+reminder+(comments ? " // do not change, this set to true will nag you to type /helmet until you do." : ""));
 			
 			return str.ToString();
 		}
