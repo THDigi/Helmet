@@ -37,8 +37,11 @@
     <Reference Include="Sandbox.Game">
       <HintPath>C:\Steam\SteamApps\common\SpaceEngineers\Bin\Sandbox.Game.dll</HintPath>
     </Reference>
-    <Reference Include="Sandbox.Graphics">
-      <HintPath>C:\Steam\SteamApps\common\SpaceEngineers\Bin\Sandbox.Graphics.dll</HintPath>
+    <Reference Include="SpaceEngineers.Game">
+      <HintPath>C:\Steam\steamapps\common\SpaceEngineers\Bin\SpaceEngineers.Game.dll</HintPath>
+    </Reference>
+    <Reference Include="SpaceEngineers.ObjectBuilders">
+      <HintPath>C:\Steam\steamapps\common\SpaceEngineers\Bin\SpaceEngineers.ObjectBuilders.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core">
@@ -60,11 +63,9 @@
     <Reference Include="VRage.Math">
       <HintPath>C:\Steam\SteamApps\common\SpaceEngineers\Bin\VRage.Math.dll</HintPath>
     </Reference>
-    <Reference Include="VRage.Render11">
-      <HintPath>C:\Steam\SteamApps\common\SpaceEngineers\Bin\VRage.Render11.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Benchmark.cs" />
     <Compile Include="Helmet.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="Settings.cs" />

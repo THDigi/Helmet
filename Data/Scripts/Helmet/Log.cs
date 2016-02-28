@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Sandbox.ModAPI;
 using Sandbox.Common;
+using VRage.Game;
 using VRage.Utils;
 
 namespace Digi.Utils
@@ -12,6 +13,7 @@ namespace Digi.Utils
     class Log
     {
         public const string MOD_NAME = "Helmet";
+        public const int WORKSHOP_ID = 428842256;
         public const string LOG_FILE = "info.log";
 
         private static System.IO.TextWriter writer = null;
@@ -48,7 +50,7 @@ namespace Digi.Utils
             {
                 MyLog.Default.WriteLineAndConsole(MOD_NAME + " error: " + msg);
                 
-                string text = MOD_NAME + " error - open %AppData%/SpaceEngineers/Storage/" + MyAPIGateway.Session.WorkshopId + "_" + MOD_NAME + "/" + LOG_FILE + " for details";
+                string text = MOD_NAME + " error - open %AppData%/SpaceEngineers/Storage/" + WORKSHOP_ID + "_" + MOD_NAME + "/" + LOG_FILE + " for details";
                 
                 if(notify == null)
                 {

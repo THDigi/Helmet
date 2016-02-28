@@ -8,7 +8,6 @@ using System.IO;
 using Sandbox.Common;
 using Sandbox.Common.Components;
 using Sandbox.Common.ObjectBuilders;
-using Sandbox.Common.ObjectBuilders.VRageData;
 using Sandbox.Definitions;
 using Sandbox.Engine;
 using Sandbox.Engine.Physics;
@@ -20,7 +19,6 @@ using VRageMath;
 using VRage;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
-using VRage.Components;
 using VRage.Utils;
 using VRage.Library.Utils;
 

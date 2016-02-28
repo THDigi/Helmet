@@ -8,7 +8,6 @@ using System.IO;
 using Sandbox.Common;
 using Sandbox.Common.Components;
 using Sandbox.Common.ObjectBuilders;
-using Sandbox.Common.ObjectBuilders.VRageData;
 using Sandbox.Definitions;
 using Sandbox.Engine;
 using Sandbox.Engine.Physics;
@@ -19,10 +18,11 @@ using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces;
 using VRage.Common.Utils;
+using VRage.Game;
 using VRageMath;
 using VRage;
 using VRage.ObjectBuilders;
-using VRage.Components;
+using VRage.Game.Components;
 using VRage.ModAPI;
 using VRage.Utils;
 using Digi.Utils;
@@ -51,7 +51,7 @@ namespace Digi.Helmet
                     if(charObj.HandWeapon != null && Entity.EntityId == charObj.HandWeapon.EntityId)
                     {
                         Helmet.holdingTool = Entity;
-                        Helmet.holdingToolId = objectBuilder.GetId();
+                        Helmet.holdingToolTypeId = objectBuilder.TypeId;
                     }
                 }
             }

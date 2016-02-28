@@ -15,7 +15,7 @@
       <UseAtlas>false</UseAtlas>
 	<NeedSort>true</NeedSort>
       <Emissivity>0</Emissivity>
-	<Reflectivity>1.0</Reflectivity>
+	<Reflectivity>0.05</Reflectivity>
       <UVOffset>
         <X>0</X>
         <Y>0</Y>
@@ -28,7 +28,7 @@
         <X>1.0</X>
         <Y>1.0</Y>
 	  <Z>1.0</Z>
-	  <W>0.1</W>
+	  <W>0.05</W>
       </Color>
     </TransparentMaterial>
 
@@ -115,9 +115,9 @@
         <Y>1</Y>
       </UVSize>
 	<Color>
-        <X>0.5</X>
-        <Y>0.5</Y>
-	  <Z>0.5</Z>
+        <X>0.65</X>
+        <Y>0.65</Y>
+	  <Z>0.65</Z>
 	  <W>0.4</W>
       </Color>
     </TransparentMaterial>

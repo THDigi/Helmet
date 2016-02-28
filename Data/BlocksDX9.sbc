@@ -4,7 +4,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_Helmet_vignette</SubtypeId>
       </Id>
       <DisplayName>DX9_Helmet_vignette</DisplayName>
@@ -24,7 +24,7 @@
     </Definition>
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_Helmet_vignetteNoReflection</SubtypeId>
       </Id>
       <DisplayName>DX9_Helmet_vignetteNoReflection</DisplayName>
@@ -44,7 +44,7 @@
     </Definition>
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_Helmet_vignetteBroken</SubtypeId>
       </Id>
       <DisplayName>DX9_Helmet_vignetteBroken</DisplayName>
@@ -65,7 +65,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_health</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_health</DisplayName>
@@ -86,7 +86,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_healthBar</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_healthBar</DisplayName>
@@ -107,7 +107,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_energy</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_energy</DisplayName>
@@ -128,7 +128,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_energyBar</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_energyBar</DisplayName>
@@ -149,7 +149,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_oxygen</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_oxygen</DisplayName>
@@ -170,7 +170,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_oxygenBar</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_oxygenBar</DisplayName>
@@ -191,7 +191,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_oxygenenv0</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_oxygenenv0</DisplayName>
@@ -211,7 +211,7 @@
     </Definition>
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_oxygenenv1</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_oxygenenv1</DisplayName>
@@ -231,7 +231,7 @@
     </Definition>
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_oxygenenv2</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_oxygenenv2</DisplayName>
@@ -252,7 +252,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_hydrogen</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_hydrogen</DisplayName>
@@ -273,7 +273,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_hydrogenBar</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_hydrogenBar</DisplayName>
@@ -294,7 +294,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_inventory</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_inventory</DisplayName>
@@ -315,7 +315,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_inventoryBar</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_inventoryBar</DisplayName>
@@ -335,7 +335,7 @@
     </Definition>
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_broadcasting</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_broadcasting</DisplayName>
@@ -356,7 +356,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_dampeners</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_dampeners</DisplayName>
@@ -377,7 +377,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_warning</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_warning</DisplayName>
@@ -398,16 +398,16 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>DX9_HelmetHUD_gravityDir</SubtypeId>
+        <TypeId>CubeBlock</TypeId>
+        <SubtypeId>DX9_HelmetHUD_vector</SubtypeId>
       </Id>
-      <DisplayName>DX9_HelmetHUD_gravityDir</DisplayName>
+      <DisplayName>DX9_HelmetHUD_vector</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
       <Size x="1" y="1" z="1" />
       <ModelOffset x="0" y="0" z="0" />
-      <Model>Models\DX9_GravityDir.mwm</Model>
+      <Model>Models\DX9_VectorBall.mwm</Model>
       <Components>
         <Component Subtype="SteelPlate" Count="1" />
       </Components>
@@ -418,16 +418,36 @@
     </Definition>
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
-        <SubtypeId>DX9_HelmetHUD_gravityNone</SubtypeId>
+        <TypeId>CubeBlock</TypeId>
+        <SubtypeId>DX9_HelmetHUD_vectorGravity</SubtypeId>
       </Id>
-      <DisplayName>DX9_HelmetHUD_gravityNone</DisplayName>
+      <DisplayName>DX9_HelmetHUD_vectorGravity</DisplayName>
       <Icon>Textures\FAKE.dds</Icon>
       <CubeSize>Small</CubeSize>
       <BlockTopology>TriangleMesh</BlockTopology>
       <Size x="1" y="1" z="1" />
       <ModelOffset x="0" y="0" z="0" />
-      <Model>Models\DX9_NoGravity.mwm</Model>
+      <Model>Models\DX9_VectorGravity.mwm</Model>
+      <Components>
+        <Component Subtype="SteelPlate" Count="1" />
+      </Components>
+      <CriticalComponent Subtype="SteelPlate" Index="0" />
+      <EdgeType>Light</EdgeType>
+      <BuildTimeSeconds>999999</BuildTimeSeconds>
+      <Public>false</Public>
+    </Definition>
+    <Definition>
+      <Id>
+        <TypeId>CubeBlock</TypeId>
+        <SubtypeId>DX9_HelmetHUD_vectorVelocity</SubtypeId>
+      </Id>
+      <DisplayName>DX9_HelmetHUD_vectorVelocity</DisplayName>
+      <Icon>Textures\FAKE.dds</Icon>
+      <CubeSize>Small</CubeSize>
+      <BlockTopology>TriangleMesh</BlockTopology>
+      <Size x="1" y="1" z="1" />
+      <ModelOffset x="0" y="0" z="0" />
+      <Model>Models\DX9_VectorVelocity.mwm</Model>
       <Components>
         <Component Subtype="SteelPlate" Count="1" />
       </Components>
@@ -439,7 +459,7 @@
 
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_horizon</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_horizon</DisplayName>
@@ -459,7 +479,7 @@
     </Definition>
     <Definition>
       <Id>
-        <TypeId>TerminalBlock</TypeId>
+        <TypeId>CubeBlock</TypeId>
         <SubtypeId>DX9_HelmetHUD_horizonBar</SubtypeId>
       </Id>
       <DisplayName>DX9_HelmetHUD_horizonBar</DisplayName>
