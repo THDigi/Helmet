@@ -11,6 +11,421 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            
+            
+            // TODO Testing/remove
+            try
+            {
+                if(subpart == null && helmet != null)
+                {
+                    subpart = new MyEntity();
+                    subpart.Init(null, Path.GetFullPath(MyAPIGateway.Utilities.GamePaths.ModsPath+@"\Helmet.dev\Models\Oxygen.mwm"), helmet as MyEntity, null, null);
+                    subpart.Render.PersistentFlags = MyPersistentEntityFlags2.None;
+                    subpart.PositionComp.LocalMatrix = Matrix.CreateFromDir(Vector3.Forward, Vector3.Up);
+                    subpart.Flags = EntityFlags.Visible | EntityFlags.NeedsDraw | EntityFlags.NeedsDrawFromParent;
+                    subpart.OnAddedToScene(helmet);
+                    //var ent = subpart as IMyEntity;
+                    //ent.SetWorldMatrix(helmet.WorldMatrix);
+                    
+                    MyAPIGateway.Utilities.ShowNotification("spawned, parented="+((helmet as MyEntity) != null), 5000, MyFontEnum.Green);
+                }
+                else if(subpart != null)
+                {
+                    subpart.PositionComp.LocalMatrix = Matrix.CreateTranslation(Vector3.Forward * 2);
+                    
+                    /*
+                    var matrix = subpart.PositionComp.WorldMatrix;
+                    matrix.Translation += helmet.WorldMatrix.Backward * 2;
+                    subpart.PositionComp.SetWorldMatrix(matrix);
+                     */
+                }
+            }
+            catch(Exception e)
+            {
+                Log.Error(e);
+            }
+
+
+
+			MyEntitySubpart subpart = new MyEntitySubpart();
+			/*
+			subpart.Render.EnableColorMaskHsv = this.Render.EnableColorMaskHsv;
+			subpart.Render.ColorMaskHsv = this.Render.ColorMaskHsv;
+			 */
+			
+			var model = "Models\\Vignette_Broken.mwm";
+			subpart.Init(null, model, null, null, null);
+			subpart.Render.PersistentFlags = MyPersistentEntityFlags2.None;
+			subpart.Render.NeedsDrawFromParent = false;
+			subpart.PositionComp.LocalMatrix = helmet.LocalMatrix; //Matrix.CreateFromDir(Vector3.Forward, Vector3.Up);
+			subpart.Flags = EntityFlags.Visible;
+			subpart.OnAddedToScene(null);
+			//var ent = subpart as IMyEntity;
+			//ent.SetWorldMatrix(helmet.WorldMatrix);
+			
+			//MyAPIGateway.Entities.AddEntity(ent, true);
+			
+
+
+
+
+
+
+
+
+
+						/*
+						// set the gravity icon type and update the gravity direction
+						if(id == Icons.GRAVITY)
+						{
+							if(gravitySources == 0)
+								name += "None";
+							else
+								name += "Dir";
+						}
+						 */
+						
+
+						
+						/*
+						bool inGravity = gravitySources > 0;
+						
+						if(prevGravityStatus != inGravity)
+						{
+							if(iconEntities[Icons.GRAVITY] != null)
+							{
+								iconEntities[Icons.GRAVITY].Close(); // remove the gravity icon so it can be re-added as the changed one
+								iconEntities[Icons.GRAVITY] = null;
+							}
+							
+							prevGravityStatus = !prevGravityStatus;
+						}
+						 */
+
+
+
+
+
+					
+					
+					
+					/*
+					var matrixGravity = matrix;
+					var matrixVelocity = matrix;
+					
+					if(gravitySources > 0)
+					{
+						AlignToVector(ref matrixGravity, gravityDir);
+						
+						matrixGravity *= offsetV * offsetH;
+						matrixGravity.Translation = matrix.Translation;
+						
+						vectorGravity.SetWorldMatrix(matrixGravity);
+					}
+					
+					if(velL > 0)
+					{
+						var velN = Vector3D.Normalize(vel);
+						var vecScale = new Vector3D(0, 0, MathHelper.Clamp(velL / 10f, 0.1, 4));
+						MatrixD.Rescale(ref matrixVelocity, ref vecScale);
+						
+						AlignToVector(ref matrixVelocity, velN);
+						
+						matrixVelocity *= offsetV * offsetH;
+						matrixVelocity.Translation = matrix.Translation;
+					}
+					else
+					{
+						matrixVelocity.Translation = matrix.Translation + matrix.Backward * 1000;
+					}
+					
+					vectorVelocity.SetWorldMatrix(matrixVelocity);
+					 */
+					
+
+
+
+
+
+
+
+
+				
+				
+				
+				/*
+				if(camera is IMyCharacter || (camera == contrEnt && contrEnt is IMyShipController))
+				{
+					if(camera is IMyCharacter)
+					{
+						characterEntity = camera as IMyEntity;
+						
+						MyAPIGateway.Utilities.ShowNotification("camera on character; characterEntity="+characterEntity, 16, MyFontEnum.Green); // TODO REMOVE
+					}
+					else if(contrEnt is IMyCharacter)
+					{
+						characterEntity = contrEnt;
+						
+						MyAPIGateway.Utilities.ShowNotification("controlling on character; characterEntity="+characterEntity, 16, MyFontEnum.Green); // TODO REMOVE
+					}
+					else if(contrEnt is IMyShipController)
+					{
+						if(characterEntity == null && contrEnt.Hierarchy.Children.Count > 0)
+						{
+							foreach(var child in contrEnt.Hierarchy.Children)
+							{
+								if(child.Entity is IMyCharacter && child.Entity.DisplayName == MyAPIGateway.Session.Player.DisplayName)
+								{
+									characterEntity = child.Entity;
+									break;
+								}
+							}
+						}
+						
+						MyAPIGateway.Utilities.ShowNotification("controlling ship; characterEntity="+characterEntity, 16, MyFontEnum.Green); // TODO REMOVE
+					}
+					else
+					{
+						MyAPIGateway.Utilities.ShowNotification("UNKNOWN TYPE; characterEntity="+characterEntity, 16, MyFontEnum.Green); // TODO REMOVE
+					}
+					
+					if(AttachHelmet())
+					{
+						return;
+					}
+				}
+				 */
+
+
+
+
+
+
+
+                                /*
+                                str.Append(LCD_PAD).Append("Battery: ");
+                                
+                                float bat = MyHud.CharacterInfo.BatteryEnergy;
+                                
+                                if(bat != prevBattery)
+                                {
+                                    long now = DateTime.UtcNow.Ticks;
+                                    float elapsed = (float)TimeSpan.FromTicks(now - prevBatteryTime).TotalSeconds;
+                                    float diff = bat - prevBattery;
+                                    float eta;
+                                    tmp.Clear();
+                                    
+                                    if(prevBattery > bat)
+                                    {
+                                        eta = (0 - bat) / (diff / elapsed);
+                                    }
+                                    else
+                                    {
+                                        tmp.Append("+");
+                                        eta = (100 - bat) / (diff / elapsed);
+                                    }
+                                    
+                                    tmp.Append(Math.Round(bat, 2)).Append("% (");
+                                    MyValueFormatter.AppendTimeInBestUnit(eta, tmp);
+                                    tmp.Append(")");
+                                    batteryTimeCache = tmp.ToString();
+                                    tmp.Clear();
+                                    
+                                    prevBatteryTime = now;
+                                    prevBattery = bat;
+                                }
+                                
+                                if(batteryTimeCache == null)
+                                    str.Append(Math.Round(bat, 2)).Append("% (calc.)");
+                                else
+                                    str.Append(batteryTimeCache);
+                                
+                                str.AppendLine();
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                str.Append(LCD_PAD).Append("Oxygen: ");
+                                
+                                float o2 = MyHud.CharacterInfo.OxygenLevel * 100;
+                                
+                                if(o2 != prevBattery)
+                                {
+                                    long now = DateTime.UtcNow.Ticks;
+                                    float elapsed = (float)TimeSpan.FromTicks(now - prevBatteryTime).TotalSeconds;
+                                    float diff = o2 - prevBattery;
+                                    float eta;
+                                    tmp.Clear();
+                                    
+                                    if(prevBattery > o2)
+                                    {
+                                        eta = (0 - o2) / (diff / elapsed);
+                                    }
+                                    else
+                                    {
+                                        tmp.Append("+");
+                                        eta = (100 - o2) / (diff / elapsed);
+                                    }
+                                    
+                                    tmp.Append(Math.Round(o2, 2)).Append("% (");
+                                    MyValueFormatter.AppendTimeInBestUnit(eta, tmp);
+                                    tmp.Append(")");
+                                    batteryTimeCache = tmp.ToString();
+                                    tmp.Clear();
+                                    
+                                    prevBatteryTime = now;
+                                    prevBattery = o2;
+                                }
+                                
+                                if(batteryTimeCache == null)
+                                    str.Append(Math.Round(o2, 2)).Append("% (calc.)");
+                                else
+                                    str.Append(batteryTimeCache);
+                                
+                                str.AppendLine();
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                float h = MyHud.CharacterInfo.HydrogenRatio * 100;
+                                str.Append(LCD_PAD).Append("Hydrogen: ").Append((int)h).Append("% (?s)").AppendLine();
+                                 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                /* TODO REMOVE
+                    var dir = Vector3D.Normalize(headPos - matrix.Translation);
+                    dir = Vector3D.Transform(dir, MatrixD.CreateFromAxisAngle(matrix.Right, MathHelper.ToRadians(90)));
+                    var diff = dir - matrix.Down;
+                    var up = matrix.Forward;
+                    AlignToVector(ref matrix, gravityDir);
+                    
+                    var tmp = matrix.Translation;
+                    matrix *= MatrixD.CreateFromDir(diff, up);
+                    matrix.Translation = tmp;
+                    
+                    /*
+                    var dir = Vector3D.Normalize(headPos - matrix.Translation);
+                    float angV = (float)Math.Acos(Vector3D.Dot(matrix.Backward, dir));
+                    float angH = (float)Math.Acos(Vector3D.Dot(matrix.Left, dir)) - MathHelper.ToRadians(90);
+                    
+                    var offsetV = MatrixD.CreateFromAxisAngle(matrix.Left, angV);
+                    Vector3 affinedGravityDir = Vector3.Transform(gravityDir, offsetV);
+                    AlignToVector(ref matrix, affinedGravityDir);
+                    
+                    
+                    /*
+                    matrix.Translation += matrix.Forward * 0.05;
+                    
+                    var dir = Vector3D.Normalize(headPos - matrix.Translation);
+                    var offsetMatrix = MatrixD.CreateFromDir(dir, matrix.Up);
+                    Vector3 affinedGravityDir = Vector3.Transform(gravityDir, offsetMatrix);
+                    AlignToVector(ref matrix, affinedGravityDir);
+                    
+                    
+                    /*
+                    matrix.Translation += matrix.Forward * 0.05;
+                    
+                    var tmp = matrix.Translation;
+                    headPos += matrix.Forward * 0.21;
+                    var dir = Vector3D.Normalize(headPos - matrix.Translation);
+                    float angV = (float)Math.Acos(Vector3D.Dot(matrix.Backward, dir));
+                    float angH = (float)Math.Acos(Vector3D.Dot(matrix.Left, dir)) - MathHelper.ToRadians(90);
+                    
+                    MyAPIGateway.Utilities.ShowNotification("angV="+Math.Round(MathHelper.ToDegrees(angV), 0)+"; angH="+Math.Round(MathHelper.ToDegrees(angH), 0), 16, MyFontEnum.Green);
+                    MyAPIGateway.Utilities.ShowNotification("dotV="+Math.Round(Vector3D.Dot(matrix.Backward, dir), 2)+"; dotH="+Math.Round(Vector3D.Dot(matrix.Left, dir), 2), 16, MyFontEnum.Green);
+                    
+                    var offsetV = MatrixD.CreateFromAxisAngle(matrix.Left, angV);
+                    var offsetH = MatrixD.CreateFromAxisAngle(matrix.Up, angH);
+                    
+                    AlignToVector(ref matrix, gravityDir);
+                    
+                    matrix = matrix * offsetV * offsetH;
+                    matrix.Translation = tmp;
+                    
+                    /*
+                    headPos += matrix.Forward * 0.21;
+                    var diff = matrix.Backward - Vector3D.Normalize(headPos - matrix.Translation);
+                    var vec = Vector3D.Normalize(gravityDir + diff);
+                    AlignToVector(ref matrix, vec);
+                 */
+                
+                /* aim at eyes
+                    headPos += matrix.Forward * 0.21;
+                    AlignToVector(ref matrix, Vector3D.Normalize(headPos - matrix.Translation));
+                 */
+                
+                // TODO fix the perspective misalignment
+                
+
+
+
+
+                /*
+                if(settings.elements[Icons.WARNING].show &&
+                   (values[Icons.HEALTH] <= settings.elements[Icons.HEALTH].warnPercent
+                    || values[Icons.ENERGY] <= settings.elements[Icons.ENERGY].warnPercent
+                    || values[Icons.OXYGEN] <= settings.elements[Icons.OXYGEN].warnPercent
+                    || (values[Icons.HYDROGEN] <= settings.elements[Icons.HYDROGEN].warnPercent && (settings.elements[Icons.HYDROGEN].warnMoveMode == 0 ? true : settings.elements[Icons.HYDROGEN].warnMoveMode == moveMode))))
+                {
+                    double warnTick = DateTime.UtcNow.Ticks;
+                    
+                    if(lastWarningBlink < warnTick)
+                    {
+                        warningBlinkOn = !warningBlinkOn;
+                        lastWarningBlink = warnTick + (TimeSpan.TicksPerSecond * settings.warnBlinkTime);
+                    }
+                    
+                    show[Icons.WARNING] = true;
+                }
+                 */
+                
+
+
+
+
+
+
                 /*
                 var cam = MyAPIGateway.Session.Camera;
                 double scale = settings.scale;
