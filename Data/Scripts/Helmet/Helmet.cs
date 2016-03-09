@@ -51,7 +51,7 @@ namespace Digi.Helmet
         
         private float oldFov = 60;
         
-        public static List<Ingame.IMyGravityGeneratorBase> gravityGenerators = new List<Ingame.IMyGravityGeneratorBase>();
+        public static Dictionary<long, Ingame.IMyGravityGeneratorBase> gravityGenerators = new Dictionary<long, Ingame.IMyGravityGeneratorBase>();
         private Vector3 artificialDir = Vector3.Zero;
         private Vector3 naturalDir = Vector3.Zero;
         private Vector3 gravityDir = Vector3.Zero;
@@ -1968,7 +1968,7 @@ namespace Digi.Helmet
                 
                 naturalForce = naturalDir.Length();
                 
-                foreach(var generator in gravityGenerators)
+                foreach(var generator in gravityGenerators.Values)
                 {
                     if(generator.IsWorking)
                     {
@@ -2197,66 +2197,55 @@ namespace Digi.Helmet
             MyAPIGateway.Utilities.ShowMissionScreen("Helmet Mod Commands", "", "You can type these commands in the chat.", HELP_COMMANDS, null, "Close");
         }
     }
-
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_CubeGrid))]
-    public class Grid : MyGameLogicComponent
+    
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGenerator))]
+    public class GravityGeneratorFlat : GravityGeneratorLogic { }
+    
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGeneratorSphere))]
+    public class GravityGeneratorSphere : GravityGeneratorLogic { }
+    
+    public class GravityGeneratorLogic : MyGameLogicComponent
     {
-        private MyObjectBuilder_EntityBase objectBuilder;
-        
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            this.objectBuilder = objectBuilder;
-            
             Entity.NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
         
-        public override void UpdateOnceBeforeFrame() // TODO test as client
+        public override void UpdateOnceBeforeFrame()
         {
-            var grid = Entity as IMyCubeGrid;
-            
-            // find existing gravity generators
-            List<IMySlimBlock> blocks = new List<IMySlimBlock>();
-            grid.GetBlocks(blocks, b => b.FatBlock is Ingame.IMyGravityGeneratorBase);
-            
-            foreach(var slimBlock in blocks)
+            try
             {
-                Helmet.gravityGenerators.Add(slimBlock.FatBlock as Ingame.IMyGravityGeneratorBase);
+                var block = Entity as Ingame.IMyGravityGeneratorBase;
+                
+                if(block.CubeGrid.Physics == null)
+                    return;
+                
+                Helmet.gravityGenerators.Add(block.EntityId, block);
             }
-            
-            // monitor generator adding/removing
-            grid.OnBlockAdded += BlockAdded;
-            grid.OnBlockRemoved += BlockRemoved;
-        }
-        
-        public void BlockAdded(IMySlimBlock slimBlock)
-        {
-            if(slimBlock.FatBlock is Ingame.IMyGravityGeneratorBase)
+            catch(Exception e)
             {
-                Helmet.gravityGenerators.Add(slimBlock.FatBlock as Ingame.IMyGravityGeneratorBase);
-            }
-        }
-        
-        public void BlockRemoved(IMySlimBlock slimBlock)
-        {
-            if(slimBlock.FatBlock is Ingame.IMyGravityGeneratorBase)
-            {
-                Helmet.gravityGenerators.Remove(slimBlock.FatBlock as Ingame.IMyGravityGeneratorBase);
+                Log.Error(e);
             }
         }
         
         public override void Close()
         {
-            // grid removed, clean stuff
-            Helmet.gravityGenerators.RemoveAll(g => g.CubeGrid.EntityId == Entity.EntityId);
-            objectBuilder = null;
+            try
+            {
+                Helmet.gravityGenerators.Remove(Entity.EntityId);
+            }
+            catch(Exception e)
+            {
+                Log.Error(e);
+            }
         }
         
         public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)
         {
-            return copy ? (MyObjectBuilder_EntityBase)objectBuilder.Clone() : objectBuilder;
+            return Entity.GetObjectBuilder(copy);
         }
     }
-
+    
     public static class Extensions
     {
         public static string ToUpperFirst(this string s)
