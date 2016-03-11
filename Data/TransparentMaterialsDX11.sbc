@@ -25,9 +25,9 @@
         <Y>1</Y>
       </UVSize>
 	<Color>
-        <X>1.0</X>
-        <Y>1.0</Y>
-	  <Z>1.0</Z>
+        <X>0.5</X>
+        <Y>0.5</Y>
+	  <Z>0.5</Z>
 	  <W>0.05</W>
       </Color>
     </TransparentMaterial>

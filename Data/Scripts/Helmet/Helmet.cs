@@ -30,6 +30,7 @@ using VRage.ObjectBuilders;
 using VRage.Utils;
 using Digi.Utils;
 using Digi.Helmet;
+using VRageRender;
 using Ingame = Sandbox.ModAPI.Ingame;
 
 namespace Digi.Helmet
@@ -155,9 +156,9 @@ namespace Digi.Helmet
             "For advanced editing go to:\n" +
             "%appdata%\\SpaceEngineers\\Storage\\428842256_Helmet\\helmet.cfg";
         
-        private const string FIRSTRUN_TITLE = "Helmet mod";
-        private const string FIRSTRUN_SUB = "TL;DR: Running DX11 ? Type in chat: /helmet dx11";
-        private const string FIRSTRUN_TEXT = "\nThe mod has individual tweaks for DX9 and DX11, because it can't detect what you're running it's set for DX9 by default.\n\nIf you're running DX11 type /helmet dx11 in chat!";
+        //private const string FIRSTRUN_TITLE = "Helmet mod";
+        //private const string FIRSTRUN_SUB = "TL;DR: Running DX11 ? Type in chat: /helmet dx11";
+        //private const string FIRSTRUN_TEXT = "\nThe mod has individual tweaks for DX9 and DX11, because it can't detect what you're running it's set for DX9 by default.\n\nIf you're running DX11 type /helmet dx11 in chat!";
         
         public void Init()
         {
@@ -399,7 +400,7 @@ namespace Digi.Helmet
                     
                     if(settings.firstLoad)
                     {
-                        MyAPIGateway.Utilities.ShowMissionScreen(FIRSTRUN_TITLE, "", FIRSTRUN_SUB, FIRSTRUN_TEXT, null, "Close");
+                        //MyAPIGateway.Utilities.ShowMissionScreen(FIRSTRUN_TITLE, "", FIRSTRUN_SUB, FIRSTRUN_TEXT, null, "Close");
                     }
                 }
                 
@@ -2147,7 +2148,7 @@ namespace Digi.Helmet
                 else if(msg.StartsWith("dx9"))
                 {
                     MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Configured for DX9; saved to config.");
-                    settings.renderer = Renderer.DX9;
+                    settings.renderer = MyGraphicsRenderer.DX9;
                     settings.Save();
                     RemoveHelmet();
                     return;
@@ -2155,7 +2156,7 @@ namespace Digi.Helmet
                 else if(msg.StartsWith("dx11"))
                 {
                     MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Configured for DX11; saved to config.");
-                    settings.renderer = Renderer.DX11;
+                    settings.renderer = MyGraphicsRenderer.DX11;
                     settings.Save();
                     RemoveHelmet();
                     return;

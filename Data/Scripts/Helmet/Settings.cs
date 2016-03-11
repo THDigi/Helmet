@@ -20,6 +20,7 @@ using VRage.Common.Utils;
 using VRageMath;
 using VRage;
 using Digi.Utils;
+using VRageRender;
 
 namespace Digi.Helmet
 {
@@ -56,12 +57,6 @@ namespace Digi.Helmet
         }
     }
     
-    public enum Renderer
-    {
-        DX9 = 0,
-        DX11
-    }
-    
     public enum SpeedUnits
     {
         mps,
@@ -89,7 +84,7 @@ namespace Digi.Helmet
         private const string FILE = "helmet.cfg";
         
         public bool enabled = true;
-        public Renderer renderer = Renderer.DX9;
+        public MyGraphicsRenderer renderer = MyGraphicsRenderer.DX9;
         public string helmetModel = "vignette";
         public bool hud = true;
         public bool hudAlways = false;
@@ -99,6 +94,8 @@ namespace Digi.Helmet
         public double hudScale = 0.0f;
         public float warnBlinkTime = 0.25f;
         public float delayedRotation = 0.5f;
+        
+        public MyGraphicsRenderer prevRenderer = MyGraphicsRenderer.DX9;
         
         public int displayUpdateRate = 20;
         public int displayQuality = 1;
@@ -160,6 +157,16 @@ namespace Digi.Helmet
             {
                 firstLoad = true; // config didn't exist, assume it's the first time the mod is loaded
                 ScaleForFOV(MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView)); // automatically set the scale according to player's FOV
+                renderer = prevRenderer = MyAPIGateway.Session.Config.GraphicsRenderer; // automatically set the right renderer
+            }
+            else
+            {
+                var r = MyAPIGateway.Session.Config.GraphicsRenderer;
+                
+                if(r != prevRenderer)
+                {
+                    renderer = prevRenderer = r;
+                }
             }
             
             Save(); // refresh config in case of any missing or extra settings
@@ -195,7 +202,7 @@ namespace Digi.Helmet
                 bool b;
                 float f;
                 double d;
-                Renderer r;
+                MyGraphicsRenderer r;
                 SpeedUnits u;
                 string[] rgb;
                 byte red,green,blue;
@@ -342,8 +349,14 @@ namespace Digi.Helmet
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
                             case "renderer":
-                                if(Enum.TryParse<Renderer>(args[1].ToUpper(), out r))
+                                if(Enum.TryParse<MyGraphicsRenderer>(args[1].ToUpper(), out r))
                                     renderer = r;
+                                else
+                                    Log.Error("Invalid "+args[0]+" value: " + args[1]);
+                                continue;
+                            case "prevrenderer":
+                                if(Enum.TryParse<MyGraphicsRenderer>(args[1].ToUpper(), out r))
+                                    prevRenderer = r;
                                 else
                                     Log.Error("Invalid "+args[0]+" value: " + args[1]);
                                 continue;
@@ -489,7 +502,7 @@ namespace Digi.Helmet
             
             str.Append("enabled=").Append(enabled).AppendLine(comments ? " // enable the mod ?" : "");
             //str.AppendLine("helmetmodel="+helmetModel+(comments ? " // options: "+String.Join(", ", helmetModels) : ""));
-            str.Append("renderer=").Append(renderer).AppendLine(comments ? " // renderer used in-game, options: "+String.Join(", ", Enum.GetNames(typeof(Renderer))) : "");
+            str.Append("renderer=").Append(renderer).AppendLine(comments ? " // renderer used in-game, options: DX9, DX11" : "");
             str.Append("hud=").Append(hud).AppendLine(comments ? " // enable the HUD ?" : "");
             str.Append("hudalways=").Append(hudAlways).AppendLine(comments ? " // toggle if the HUD shows even if the helmet is off, default: false" : "");
             str.Append("glass=").Append(glass).AppendLine(comments ? " // enable the reflective glass ?" : "");
@@ -547,12 +560,15 @@ namespace Digi.Helmet
                 }
             }
             
+            str.AppendLine().AppendLine().AppendLine();
+            str.Append("prevrenderer=").Append(prevRenderer).AppendLine(comments ? " // DO NOT EDIT! Used to reset renderer if you change it in-game." : "");
+
             return str.ToString();
         }
         
         public string GetRenderPrefix()
         {
-            return renderer == Renderer.DX9 ? DX9_PREFIX : "";
+            return renderer == MyGraphicsRenderer.DX9 ? DX9_PREFIX : "";
         }
         
         public string GetHelmetModel()
