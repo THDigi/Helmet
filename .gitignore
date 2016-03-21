@@ -230,5 +230,12 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+# Blender
+Models/*.fbx
+Models/*.hkt
+Models/*.log
+Models/*.xml
+*.blend1
+
 Ignored/
 *.txt
