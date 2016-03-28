@@ -37,6 +37,9 @@
     <Reference Include="Sandbox.Game">
       <HintPath>C:\Steam\SteamApps\common\SpaceEngineers\Bin\Sandbox.Game.dll</HintPath>
     </Reference>
+    <Reference Include="Sandbox.Graphics">
+      <HintPath>C:\Steam\steamapps\common\SpaceEngineers\Bin\Sandbox.Graphics.dll</HintPath>
+    </Reference>
     <Reference Include="SpaceEngineers.Game">
       <HintPath>C:\Steam\steamapps\common\SpaceEngineers\Bin\SpaceEngineers.Game.dll</HintPath>
     </Reference>

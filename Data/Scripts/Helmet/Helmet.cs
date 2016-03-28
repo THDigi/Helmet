@@ -7,7 +7,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using Sandbox.Common;
-using Sandbox.Common.Components;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Common.ObjectBuilders.Definitions;
 using Sandbox.Definitions;
@@ -18,11 +17,18 @@ using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
 using Sandbox.Game.Gui;
+using Sandbox.Graphics.GUI;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces;
+using SpaceEngineers.Game.ModAPI.Ingame;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
+using VRage.Game.Entity.UseObject;
+using VRage.Game.GUI.TextPanel;
+using VRage.Game.ModAPI;
+using VRage.Game.ModAPI.Interfaces;
+using VRage.Input;
 using VRageMath;
 using VRage;
 using VRage.ModAPI;
@@ -32,6 +38,7 @@ using Digi.Utils;
 using Digi.Helmet;
 using VRageRender;
 using Ingame = Sandbox.ModAPI.Ingame;
+using IMyControllableEntity = VRage.Game.ModAPI.Interfaces.IMyControllableEntity;
 
 namespace Digi.Helmet
 {
@@ -49,10 +56,12 @@ namespace Digi.Helmet
         private bool warningBlinkOn = true;
         private double lastWarningBlink = 0;
         private long helmetBroken = 0;
+        private bool prevHelmetOn = false;
+        private long animationStart = 0;
         
         private float oldFov = 60;
         
-        public static Dictionary<long, Ingame.IMyGravityGeneratorBase> gravityGenerators = new Dictionary<long, Ingame.IMyGravityGeneratorBase>();
+        public static Dictionary<long, IMyGravityGeneratorBase> gravityGenerators = new Dictionary<long, IMyGravityGeneratorBase>();
         private Vector3 artificialDir = Vector3.Zero;
         private Vector3 naturalDir = Vector3.Zero;
         private Vector3 gravityDir = Vector3.Zero;
@@ -71,10 +80,9 @@ namespace Digi.Helmet
         private const int SKIP_TICKS_GRAVITY = 2;
         private const int SKIP_TICKS_PLANETS = 60*3;
         
-        private bool firstHelmetSpawn = true;
         private MatrixD helmetMatrix;
         private float[] values = new float[Settings.TOTAL_ELEMENTS];
-        private bool[] show = new bool[Settings.TOTAL_ELEMENTS];
+        private int[] show = new int[Settings.TOTAL_ELEMENTS];
         private MatrixD lastMatrix;
         private int lastOxygenEnv = 0;
         private bool fatalError = false;
@@ -114,6 +122,9 @@ namespace Digi.Helmet
         private Dictionary<string, int> components = new Dictionary<string, int>();
         private List<IMySlimBlock> blocks = new List<IMySlimBlock>();
         private StringBuilder tmp = new StringBuilder();
+        
+        public static bool displayUpdate = true;
+        public static string displayText = "";
         private string lastDisplayText = null;
         
         private HashSet<MyStringHash> glassBreakCauses = new HashSet<MyStringHash>()
@@ -265,7 +276,7 @@ namespace Digi.Helmet
             
             var camera = MyAPIGateway.Session.CameraController;
             
-            if(camera != null && camera.IsInFirstPersonView && MyAPIGateway.Session.ControlledObject != null && MyAPIGateway.Session.ControlledObject.Entity != null)
+            if(camera != null && MyAPIGateway.Session.ControlledObject != null && MyAPIGateway.Session.ControlledObject.Entity != null)
             {
                 var contrEnt = MyAPIGateway.Session.ControlledObject.Entity;
                 bool attach = false;
@@ -277,6 +288,8 @@ namespace Digi.Helmet
                 }
                 else if(contrEnt is Ingame.IMyShipController && camera is Ingame.IMyShipController)
                 {
+                    attach = true;
+                    
                     if(characterEntity == null && contrEnt.Hierarchy.Children.Count > 0)
                     {
                         foreach(var child in contrEnt.Hierarchy.Children)
@@ -288,10 +301,35 @@ namespace Digi.Helmet
                             }
                         }
                     }
-                    attach = true;
+                    
+                    if(settings.toggleHelmetInCockpit && characterEntity != null && contrEnt is Ingame.IMyCockpit)
+                    {
+                        if(MyGuiScreenGamePlay.ActiveGameplayScreen == null && MyGuiScreenTerminal.GetCurrentScreen() == MyTerminalPageEnum.None)
+                        {
+                            if(MyAPIGateway.Input.IsNewGameControlPressed(MyControlsSpace.HELMET))
+                            {
+                                (characterEntity as Sandbox.Game.Entities.IMyControllableEntity).SwitchHelmet();
+                            }
+                        }
+                    }
                 }
                 
-                if(attach && AttachHelmet())
+                if(characterEntity != null)
+                {
+                    bool helmetOn = (characterEntity as IMyControllableEntity).EnabledHelmet;
+                    
+                    if(helmetOn != prevHelmetOn)
+                    {
+                        if(settings.animateSpeed > 0)
+                            animationStart = DateTime.UtcNow.Ticks; // set start of animation here to avoid animating after going in first person
+                        else if(!helmetOn)
+                            RemoveHelmet(false);
+                        
+                        prevHelmetOn = helmetOn;
+                    }
+                }
+                
+                if(attach && camera.IsInFirstPersonView && AttachHelmet())
                 {
                     return;
                 }
@@ -302,9 +340,9 @@ namespace Digi.Helmet
         
         private bool AttachHelmet()
         {
-            var controllable = characterEntity as Sandbox.ModAPI.Interfaces.IMyControllableEntity;
+            var controllable = characterEntity as IMyControllableEntity;
             
-            if(controllable != null && (settings.hudAlways || controllable.EnabledHelmet))
+            if(controllable != null)
             {
                 // ignoring head Y axis on foot because of an issue with ALT and 3rd person camera bumping into the ground
                 bool inCockpit = !(MyAPIGateway.Session.CameraController is IMyCharacter); // (MyAPIGateway.Session.ControlledObject.Entity is IMyCockpit);
@@ -324,12 +362,13 @@ namespace Digi.Helmet
                 if(helmet != null)
                 {
                     if(characterEntity != null)
-                        helmet.SetPosition(characterEntity.WorldMatrix.Translation + characterEntity.WorldMatrix.Backward * 5000);
+                        helmet.SetPosition(characterEntity.WorldMatrix.Translation + characterEntity.WorldMatrix.Backward * 1000);
                     else
                         helmet.SetPosition(Vector3D.Zero);
                     
                     helmet.Close();
                     helmet = null;
+                    animationStart = 0;
                 }
             }
             
@@ -392,18 +431,7 @@ namespace Digi.Helmet
                 if(fatalError)
                     return; // stop trying if a fatal error occurs
                 
-                bool helmetOn = (characterEntity as Sandbox.ModAPI.Interfaces.IMyControllableEntity).EnabledHelmet;
-                
-                if(firstHelmetSpawn) // first time the helmet is spawned this session
-                {
-                    firstHelmetSpawn = false; // only do it once
-                    
-                    if(settings.firstLoad)
-                    {
-                        //MyAPIGateway.Utilities.ShowMissionScreen(FIRSTRUN_TITLE, "", FIRSTRUN_SUB, FIRSTRUN_TEXT, null, "Close");
-                    }
-                }
-                
+                bool helmetOn = (characterEntity as IMyControllableEntity).EnabledHelmet;
                 bool brokenHelmet = (helmetBroken > 0 && helmetBroken == characterEntity.EntityId);
                 
                 if(helmetOn && brokenHelmet)
@@ -426,10 +454,6 @@ namespace Digi.Helmet
                             return;
                         }
                     }
-                }
-                else if(helmet != null) // remove the helmet if it's taken off
-                {
-                    RemoveHelmet(false);
                 }
                 
                 if(!(MyAPIGateway.Session.CameraController is Ingame.IMyCockpit)) // No smoothing when camera is in cockpit/passenger seat because it already has smoothing
@@ -477,16 +501,39 @@ namespace Digi.Helmet
                 }
                 
                 // Align the helmet mesh
-                if(helmetOn && helmet != null)
+                if(helmet != null)
                 {
                     helmetMatrix = matrix;
                     helmetMatrix.Translation += matrix.Forward * (SCALE_DIST_ADJUST * (1.0 - settings.scale));
+                    
+                    if(animationStart > 0)
+                    {
+                        float tickDiff = (float)MathHelper.Clamp((DateTime.UtcNow.Ticks - animationStart) / (TimeSpan.TicksPerMillisecond * settings.animateSpeed * 1000), 0, 1);
+                        
+                        if(tickDiff == 1)
+                        {
+                            animationStart = 0;
+                            
+                            if(!helmetOn)
+                                RemoveHelmet(false);
+                            
+                            return;
+                        }
+                        
+                        var toMatrix = MatrixD.CreateWorld(helmetMatrix.Translation + helmetMatrix.Up * 0.5, helmetMatrix.Up, helmetMatrix.Backward);
+                        
+                        if(helmetOn)
+                            helmetMatrix = MatrixD.Slerp(toMatrix, helmetMatrix, tickDiff);
+                        else
+                            helmetMatrix = MatrixD.Slerp(helmetMatrix, toMatrix, tickDiff);
+                    }
+                    
                     helmet.SetWorldMatrix(helmetMatrix);
                     removedHelmet = false;
                 }
                 
                 // if HUD is disabled or we can't get the info, remove the HUD (if exists) and stop here
-                if(!settings.hud) // || characterObject == null)
+                if(!settings.hud) // || (!helmetOn && !settings.hudAlways)) // || characterObject == null)
                 {
                     RemoveHud();
                     return;
@@ -506,11 +553,11 @@ namespace Digi.Helmet
                     bool inShip = MyHud.ShipInfo.Visible;
                     var v = MyHud.ShipInfo;
                     
-                    if(settings.elements[Icons.BROADCASTING].show)
-                        show[Icons.BROADCASTING] = MyHud.CharacterInfo.BroadcastEnabled;
+                    if(settings.elements[Icons.BROADCASTING].show > 0)
+                        show[Icons.BROADCASTING] = MyHud.CharacterInfo.BroadcastEnabled ? 1 : 0;
                     
-                    if(settings.elements[Icons.DAMPENERS].show)
-                        show[Icons.DAMPENERS] = (inShip ? v.DampenersEnabled : c.DampenersEnabled);
+                    if(settings.elements[Icons.DAMPENERS].show > 0)
+                        show[Icons.DAMPENERS] = (inShip ? v.DampenersEnabled : c.DampenersEnabled) ? 1 : 0;
                     
                     values[Icons.HEALTH] = (characterEntity is IMyDestroyableObject ? (characterEntity as IMyDestroyableObject).Integrity : 100);
                     values[Icons.ENERGY] = c.BatteryEnergy;
@@ -531,11 +578,11 @@ namespace Digi.Helmet
                 }
                 
                 // Update the warning icon
-                show[Icons.WARNING] = false;
+                show[Icons.WARNING] = 0;
                 
                 int moveMode = (c.JetpackEnabled ? 2 : 1);
                 
-                if(settings.elements[Icons.WARNING].show)
+                if(settings.elements[Icons.WARNING].show > 0)
                 {
                     for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
                     {
@@ -551,14 +598,14 @@ namespace Digi.Helmet
                                     lastWarningBlink = warnTick + (TimeSpan.TicksPerSecond * settings.warnBlinkTime);
                                 }
                                 
-                                show[Icons.WARNING] = true;
+                                show[Icons.WARNING] = 1;
                                 break;
                             }
                         }
                     }
                 }
                 
-                if(show[Icons.VECTOR] || show[Icons.DISPLAY] || show[Icons.HORIZON])
+                if(show[Icons.VECTOR] > 0 || show[Icons.DISPLAY] > 0 || show[Icons.HORIZON] > 0)
                 {
                     if(tick % SKIP_TICKS_PLANETS == 0)
                     {
@@ -581,7 +628,7 @@ namespace Digi.Helmet
                     }
                     
                     var controller = MyAPIGateway.Session.ControlledObject as MyShipController;
-                    show[Icons.HORIZON] = (naturalForce > 0 && controller != null && controller.HorizonIndicatorEnabled);
+                    show[Icons.HORIZON] = ((naturalForce > 0 && controller != null && controller.HorizonIndicatorEnabled) ? 1 : 0);
                 }
                 
                 matrix.Translation += matrix.Forward * (HUDSCALE_DIST_ADJUST * (1.0 - settings.hudScale)); // off-set the HUD according to the HUD scale
@@ -592,7 +639,20 @@ namespace Digi.Helmet
                 // spawn and update the HUD elements
                 for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
                 {
-                    bool showIcon = show[id];
+                    bool showIcon = false;
+                    
+                    switch(show[id])
+                    {
+                        case 1:
+                            showIcon = helmetOn || animationStart != 0;
+                            break;
+                        case 2:
+                            showIcon = !helmetOn;
+                            break;
+                        case 3:
+                            showIcon = true;
+                            break;
+                    }
                     
                     if(showIcon)
                     {
@@ -628,6 +688,7 @@ namespace Digi.Helmet
                     // remove the element itself if it exists
                     if(iconEntities[id] != null)
                     {
+                        iconEntities[id].SetPosition(matrix.Translation + matrix.Backward * 1000);
                         iconEntities[id].Close();
                         iconEntities[id] = null;
                     }
@@ -638,11 +699,43 @@ namespace Digi.Helmet
                     // remove the bar if it has one and it exists
                     if(element.hasBar && iconBarEntities[id] != null)
                     {
+                        iconBarEntities[id].SetPosition(matrix.Translation + matrix.Backward * 1000);
                         iconBarEntities[id].Close();
                         iconBarEntities[id] = null;
                     }
                     
+                    if(id == Icons.VECTOR)
+                    {
+                        if(vectorGravity != null)
+                        {
+                            vectorGravity.SetPosition(matrix.Translation + matrix.Backward * 1000);
+                            vectorGravity.Close();
+                            vectorGravity = null;
+                        }
+                        
+                        if(vectorVelocity != null)
+                        {
+                            vectorVelocity.SetPosition(matrix.Translation + matrix.Backward * 1000);
+                            vectorVelocity.Close();
+                            vectorVelocity = null;
+                        }
+                    }
+                    
                     return; // and STOP!
+                }
+                
+                if(id != Icons.DISPLAY)
+                {
+                    if(animationStart > 0)
+                    {
+                        float tickDiff = (float)Math.Min((DateTime.UtcNow.Ticks - animationStart) / (TimeSpan.TicksPerMillisecond * settings.animateSpeed * 1000), 1);
+                        var toMatrix = MatrixD.CreateWorld(matrix.Translation + matrix.Up * 0.5, matrix.Up, matrix.Backward);
+                        
+                        if((characterEntity as IMyControllableEntity).EnabledHelmet)
+                            matrix = MatrixD.Slerp(toMatrix, matrix, tickDiff);
+                        else
+                            matrix = MatrixD.Slerp(matrix, toMatrix, tickDiff);
+                    }
                 }
                 
                 // append the oxygen level number to the name and remove the previous entity if changed
@@ -854,7 +947,7 @@ namespace Digi.Helmet
                         {
                             if(settings.displayBorderColor.HasValue)
                             {
-                                if(Vector3.DistanceSquared(lcdSlim.GetColorMask(), settings.displayBorderColor.Value) > 0f)
+                                if(Vector3.DistanceSquared(lcdSlim.GetColorMask(), settings.displayBorderColor.Value) > 0.01f)
                                 {
                                     ghostGrid.ColorBlocks(Vector3I.Zero, Vector3I.Zero, settings.displayBorderColor.Value);
                                     lastDisplayText = null; // force rewrite
@@ -864,7 +957,7 @@ namespace Digi.Helmet
                             {
                                 var charColor = characterEntity.Render.ColorMaskHsv;
                                 
-                                if(Vector3.DistanceSquared(lcdSlim.GetColorMask(), charColor) > 0f)
+                                if(Vector3.DistanceSquared(lcdSlim.GetColorMask(), charColor) > 0.01f)
                                 {
                                     ghostGrid.ColorBlocks(Vector3I.Zero, Vector3I.Zero, charColor);
                                     lastDisplayText = null; // force rewrite
@@ -1698,15 +1791,18 @@ namespace Digi.Helmet
                             Log.Error(e);
                         }
                         
-                        string text = str.ToString();
+                        displayText = str.ToString();
                         str.Clear();
                         
-                        if(lastDisplayText == null || !text.Equals(lastDisplayText))
+                        if(lastDisplayText == null || !displayText.Equals(lastDisplayText))
                         {
-                            lastDisplayText = text;
-                            lcd.ShowTextureOnScreen();
-                            lcd.WritePublicText(text, false);
-                            lcd.ShowPublicTextOnScreen();
+                            displayUpdate = true;
+                            lastDisplayText = displayText;
+                            
+                            // updating somewhere else due to a recently appeared issue
+                            //lcd.WritePublicText(text);
+                            //lcd.ShowTextureOnScreen();
+                            //lcd.ShowPublicTextOnScreen();
                         }
                     }
                 }
@@ -1763,7 +1859,7 @@ namespace Digi.Helmet
                 Log.Error(e);
             }
         }
-        
+
         private void AlignToVector(ref MatrixD matrix, Vector3D direction)
         {
             Vector3D vector3D = new Vector3D(0.0, 0.0, 1.0);
@@ -1787,7 +1883,7 @@ namespace Digi.Helmet
             matrix.Forward = direction;
             MatrixD.Rescale(ref matrix, -1); // CreateFromDir() makes the mesh's faces inverted, this fixes that
         }
-        
+
         private void TransformHUD(ref MatrixD matrix, Vector3D pos, Vector3D head, Vector3D objUp, Vector3D? objForward)
         {
             Vector3D vector, vector2, vector3;
@@ -1822,7 +1918,7 @@ namespace Digi.Helmet
             matrix.M43 = pos.Z;
             matrix.M44 = 1.0;
         }
-        
+
         private IMyEntity SpawnPrefab(string name, bool isDisplay = false)
         {
             try
@@ -1872,14 +1968,7 @@ namespace Digi.Helmet
                 foreach(var c in ent.Hierarchy.Children)
                 {
                     c.Entity.PersistentFlags &= ~MyPersistentEntityFlags2.CastShadows;
-                    
-                    // testing stuff TODO remove?
-                    //c.Entity.Render.FastCastShadowResolve = false;
-                    //c.Entity.Render.ShadowBoxLod = false;
-                    //c.Entity.Render.NeedsResolveCastShadow = false;
-                    //c.Entity.Render.CastShadows = false;
-                    //c.Entity.Render.RemoveRenderObjects();
-                    //c.Entity.Render.AddRenderObjects();
+                    c.Entity.Render.CastShadows = false;
                 }
                 
                 MyAPIGateway.Entities.AddEntity(ent, true);
@@ -1893,7 +1982,7 @@ namespace Digi.Helmet
             
             return null;
         }
-        
+
         private static SerializableVector3 PrefabVector0 = new SerializableVector3(0,0,0);
         private static SerializableVector3I PrefabVectorI0 = new SerializableVector3I(0,0,0);
         private static SerializableBlockOrientation PrefabOrientation = new SerializableBlockOrientation(Base6Directions.Direction.Forward, Base6Directions.Direction.Up);
@@ -1938,7 +2027,7 @@ namespace Digi.Helmet
             CurrentStoredPower = float.MaxValue,
             MaxStoredPower = float.MaxValue,
         };
-        
+
         public void CalculateGravityAndPlanetsAt(Vector3D point)
         {
             artificialDir = Vector3.Zero;
@@ -1973,9 +2062,9 @@ namespace Digi.Helmet
                 {
                     if(generator.IsWorking)
                     {
-                        if(generator is Ingame.IMyGravityGeneratorSphere)
+                        if(generator is IMyGravityGeneratorSphere)
                         {
-                            var gen = (generator as Ingame.IMyGravityGeneratorSphere);
+                            var gen = (generator as IMyGravityGeneratorSphere);
                             
                             if(Vector3D.DistanceSquared(generator.WorldMatrix.Translation, point) <= (gen.Radius * gen.Radius))
                             {
@@ -1984,9 +2073,9 @@ namespace Digi.Helmet
                                 artificialDir += (Vector3)dir * (gen.Gravity / 9.81f); // HACK remove division once gravity value is fixed
                             }
                         }
-                        else if(generator is Ingame.IMyGravityGenerator)
+                        else if(generator is IMyGravityGenerator)
                         {
-                            var gen = (generator as Ingame.IMyGravityGenerator);
+                            var gen = (generator as IMyGravityGenerator);
                             
                             var halfExtents = new Vector3(gen.FieldWidth / 2, gen.FieldHeight / 2, gen.FieldDepth / 2);
                             var box = new MyOrientedBoundingBoxD(gen.WorldMatrix.Translation, halfExtents, Quaternion.CreateFromRotationMatrix(gen.WorldMatrix));
@@ -2020,7 +2109,7 @@ namespace Digi.Helmet
                 Log.Error(e);
             }
         }
-        
+
         public void MessageEntered(string msg, ref bool visible)
         {
             if(!msg.StartsWith("/helmet", StringComparison.InvariantCultureIgnoreCase))
@@ -2180,7 +2269,7 @@ namespace Digi.Helmet
                 else if(msg.StartsWith("lcd off"))
                 {
                     MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "LCD turned OFF; saved to config.");
-                    settings.elements[Icons.DISPLAY].show = false;
+                    settings.elements[Icons.DISPLAY].show = 0;
                     settings.Save();
                     RemoveHelmet();
                     return;
@@ -2188,7 +2277,7 @@ namespace Digi.Helmet
                 else if(msg.StartsWith("lcd on"))
                 {
                     MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "LCD turned ON; saved to config.");
-                    settings.elements[Icons.DISPLAY].show = true;
+                    settings.elements[Icons.DISPLAY].show = 3;
                     settings.Save();
                     RemoveHelmet();
                     return;
@@ -2199,12 +2288,38 @@ namespace Digi.Helmet
         }
     }
     
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TextPanel), "HelmetHUD_display", "HelmetHUD_displayLow")]
+    public class HelmetLCD : MyGameLogicComponent
+    {
+        public override void Init(MyObjectBuilder_EntityBase objectBuilder)
+        {
+            Entity.NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME;
+        }
+        
+        public override void UpdateAfterSimulation()
+        {
+            if(Helmet.displayUpdate)
+            {
+                Helmet.displayUpdate = false;
+                var panel = Entity as IMyTextPanel;
+                panel.ShowTextureOnScreen();
+                panel.WritePublicText(Helmet.displayText, false);
+                panel.ShowPublicTextOnScreen();
+            }
+        }
+        
+        public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)
+        {
+            return Entity.GetObjectBuilder(copy);
+        }
+    }
+    
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGenerator))]
     public class GravityGeneratorFlat : GravityGeneratorLogic { }
-    
+
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGeneratorSphere))]
     public class GravityGeneratorSphere : GravityGeneratorLogic { }
-    
+
     public class GravityGeneratorLogic : MyGameLogicComponent
     {
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
@@ -2216,7 +2331,7 @@ namespace Digi.Helmet
         {
             try
             {
-                var block = Entity as Ingame.IMyGravityGeneratorBase;
+                var block = Entity as IMyGravityGeneratorBase;
                 
                 if(block.CubeGrid.Physics == null)
                     return;
@@ -2246,7 +2361,7 @@ namespace Digi.Helmet
             return Entity.GetObjectBuilder(copy);
         }
     }
-    
+
     public static class Extensions
     {
         public static string ToUpperFirst(this string s)

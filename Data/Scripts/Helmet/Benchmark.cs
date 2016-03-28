@@ -6,7 +6,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.IO;
 using Sandbox.Common;
-using Sandbox.Common.Components;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
 using Sandbox.Engine;
