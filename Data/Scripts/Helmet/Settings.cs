@@ -524,7 +524,7 @@ namespace Digi.Helmet
                 var element = elements[id];
                 var defaultElement = defaultElements[id];
                 
-                str.Append(element.name).Append("=").Append(element.show).AppendLine(comments ? " // when to show this element, 0 = never, 1 only when helmet is ON, 2 = only when helmet is OFF, 3 = always" : "");
+                str.Append(element.name.ToUpperFirst()).Append("=").Append(element.show).AppendLine(comments ? " // when to show this element, 0 = never, 1 only when helmet is ON, 2 = only when helmet is OFF, 3 = always" : "");
                 
                 if(id != Icons.HORIZON)
                 {

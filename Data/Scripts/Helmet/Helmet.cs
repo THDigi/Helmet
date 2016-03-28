@@ -182,6 +182,9 @@ namespace Digi.Helmet
             if(isDedicated)
                 return;
             
+            if(!MyAPIGateway.Utilities.IsDedicated && !MyAPIGateway.Multiplayer.IsServer)
+                MyAPIGateway.Entities.OnEntityAdd += EntityAdded;
+            
             settings = new Settings();
             MyAPIGateway.Utilities.MessageEntered += MessageEntered;
             MyAPIGateway.Session.DamageSystem.RegisterDestroyHandler(999, EntityKilled);
@@ -195,6 +198,9 @@ namespace Digi.Helmet
             gravityGenerators.Clear();
             holdingTool = null;
             
+            if(!MyAPIGateway.Utilities.IsDedicated && !MyAPIGateway.Multiplayer.IsServer)
+                MyAPIGateway.Entities.OnEntityAdd -= EntityAdded;
+            
             MyAPIGateway.Utilities.MessageEntered -= MessageEntered;
             
             if(settings != null)
@@ -204,6 +210,19 @@ namespace Digi.Helmet
             }
             
             Log.Close();
+        }
+        
+        public void EntityAdded(IMyEntity ent) // executed only on player hosted server's clients
+        {
+            if(ent is IMyCubeGrid)
+            {
+                var grid = ent as IMyCubeGrid;
+                
+                if(grid.IsStatic && grid.GridSizeEnum == MyCubeSize.Small && grid.Name.StartsWith("helmetmod_helmet_server_"))
+                {
+                    ent.Close(); // remove server's helmet from clients...
+                }
+            }
         }
         
         public void EntityKilled(object obj, MyDamageInformation info)
@@ -1958,6 +1977,8 @@ namespace Digi.Helmet
                     PrefabBuilder.CubeBlocks.Add(PrefabCubeBlock);
                 }
                 
+                PrefabBuilder.DisplayName = PrefabBuilder.Name = "helmetmod_helmet_"+(MyAPIGateway.Multiplayer.IsServer ? "server" : "client")+"_"+name;
+                
                 MyAPIGateway.Entities.RemapObjectBuilder(PrefabBuilder);
                 var ent = MyAPIGateway.Entities.CreateFromObjectBuilder(PrefabBuilder);
                 ent.Flags &= ~EntityFlags.Sync; // don't sync on MP
@@ -2288,7 +2309,7 @@ namespace Digi.Helmet
         }
     }
     
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TextPanel), "HelmetHUD_display", "HelmetHUD_displayLow")]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TextPanel), "HelmetHUD_display", "HelmetHUD_displayLow")] // LCD blinking workaround
     public class HelmetLCD : MyGameLogicComponent
     {
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
@@ -2361,7 +2382,7 @@ namespace Digi.Helmet
             return Entity.GetObjectBuilder(copy);
         }
     }
-
+    
     public static class Extensions
     {
         public static string ToUpperFirst(this string s)
