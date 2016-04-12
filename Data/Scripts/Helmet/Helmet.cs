@@ -173,42 +173,54 @@ namespace Digi.Helmet
         
         public void Init()
         {
-            Log.Info("Initialized");
-            
             init = true;
             isServer = MyAPIGateway.Session.OnlineMode == MyOnlineModeEnum.OFFLINE || MyAPIGateway.Multiplayer.IsServer;
             isDedicated = (MyAPIGateway.Utilities.IsDedicated && isServer);
             
-            if(isDedicated)
-                return;
+            Log.Init();
+            Log.Info("Initialized");
             
-            if(!MyAPIGateway.Utilities.IsDedicated && !MyAPIGateway.Multiplayer.IsServer)
+            if(!isDedicated)
+            {
+                settings = new Settings();
+                
                 MyAPIGateway.Entities.OnEntityAdd += EntityAdded;
-            
-            settings = new Settings();
-            MyAPIGateway.Utilities.MessageEntered += MessageEntered;
-            MyAPIGateway.Session.DamageSystem.RegisterDestroyHandler(999, EntityKilled);
+                MyAPIGateway.Utilities.MessageEntered += MessageEntered;
+                MyAPIGateway.Session.DamageSystem.RegisterDestroyHandler(999, EntityKilled);
+            }
         }
         
         protected override void UnloadData()
         {
-            init = false;
-            ents.Clear();
-            planets.Clear();
-            gravityGenerators.Clear();
-            holdingTool = null;
-            
-            if(!MyAPIGateway.Utilities.IsDedicated && !MyAPIGateway.Multiplayer.IsServer)
-                MyAPIGateway.Entities.OnEntityAdd -= EntityAdded;
-            
-            MyAPIGateway.Utilities.MessageEntered -= MessageEntered;
-            
-            if(settings != null)
+            try
             {
-                settings.Close();
-                settings = null;
+                if(init)
+                {
+                    init = false;
+                    ents.Clear();
+                    planets.Clear();
+                    gravityGenerators.Clear();
+                    holdingTool = null;
+                    
+                    if(!isDedicated)
+                    {
+                        MyAPIGateway.Entities.OnEntityAdd -= EntityAdded;
+                        MyAPIGateway.Utilities.MessageEntered -= MessageEntered;
+                        
+                        if(settings != null)
+                        {
+                            settings.Close();
+                            settings = null;
+                        }
+                    }
+                }
+            }
+            catch(Exception e)
+            {
+                Log.Error(e);
             }
             
+            Log.Info("Mod unloaded.");
             Log.Close();
         }
         
