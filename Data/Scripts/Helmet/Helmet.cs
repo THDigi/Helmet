@@ -45,8 +45,7 @@ namespace Digi.Helmet
     public class Helmet : MySessionComponentBase
     {
         public bool init { get; private set; }
-        public bool isServer { get; private set; }
-        public bool isDedicated { get; private set; }
+        public bool isDedicatedHost { get; private set; }
         public Settings settings { get; private set; }
         
         public static Helmet instance { get; private set; }
@@ -182,10 +181,9 @@ namespace Digi.Helmet
             
             instance = this;
             init = true;
-            isServer = MyAPIGateway.Session.OnlineMode == MyOnlineModeEnum.OFFLINE || MyAPIGateway.Multiplayer.IsServer;
-            isDedicated = (MyAPIGateway.Utilities.IsDedicated && isServer);
+            isDedicatedHost = (MyAPIGateway.Utilities.IsDedicated && MyAPIGateway.Multiplayer.IsServer);
             
-            if(!isDedicated)
+            if(!isDedicatedHost)
             {
                 if(!MyAPIGateway.Utilities.IsDedicated && !MyAPIGateway.Multiplayer.IsServer)
                     MyAPIGateway.Entities.OnEntityAdd += EntityAdded;
@@ -210,11 +208,9 @@ namespace Digi.Helmet
                     gravityGenerators.Clear();
                     holdingTool = null;
                     
-                    if(!isDedicated)
+                    if(!isDedicatedHost)
                     {
-                        if(!MyAPIGateway.Utilities.IsDedicated && !MyAPIGateway.Multiplayer.IsServer)
-                            MyAPIGateway.Entities.OnEntityAdd -= EntityAdded;
-                        
+                        MyAPIGateway.Entities.OnEntityAdd -= EntityAdded;
                         MyAPIGateway.Utilities.MessageEntered -= MessageEntered;
                         
                         if(settings != null)
@@ -264,13 +260,22 @@ namespace Digi.Helmet
         public override void UpdateAfterSimulation()
         {
             //bench_update.Start();
-            LogicUpdate();
+            
+            try
+            {
+                LogicUpdate();
+            }
+            catch(Exception e)
+            {
+                Log.Error(e);
+            }
+            
             //bench_update.End();
         }
         
         private void LogicUpdate()
         {
-            if(isDedicated)
+            if(isDedicatedHost)
                 return;
             
             if(fatalError)
@@ -283,7 +288,7 @@ namespace Digi.Helmet
                 
                 Init();
                 
-                if(isDedicated)
+                if(isDedicatedHost)
                     return;
             }
             
@@ -318,7 +323,7 @@ namespace Digi.Helmet
         {
             var camera = MyAPIGateway.Session.CameraController;
             
-            if(camera == null || MyAPIGateway.Session.ControlledObject == null && MyAPIGateway.Session.ControlledObject.Entity == null)
+            if(camera == null || MyAPIGateway.Session.ControlledObject == null || MyAPIGateway.Session.ControlledObject.Entity == null)
                 return HelmetLogicReturn.REMOVE_ALL;
             
             if(characterEntity != null && (characterEntity.MarkedForClose || characterEntity.Closed))
@@ -376,6 +381,10 @@ namespace Digi.Helmet
                     else if(!helmetOn)
                         return HelmetLogicReturn.REMOVE_LEAVEHUD;
                 }
+            }
+            else
+            {
+                return HelmetLogicReturn.REMOVE_LEAVEHUD;
             }
             
             if(!camera.IsInFirstPersonView || !(characterEntity is IMyControllableEntity))
