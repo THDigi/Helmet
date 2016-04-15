@@ -35,7 +35,6 @@ using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRage.Utils;
 using Digi.Utils;
-using Digi.Helmet;
 using VRageRender;
 using Ingame = Sandbox.ModAPI.Ingame;
 using IMyControllableEntity = VRage.Game.ModAPI.Interfaces.IMyControllableEntity;
@@ -49,8 +48,13 @@ namespace Digi.Helmet
         public bool isServer { get; private set; }
         public bool isDedicated { get; private set; }
         public Settings settings { get; private set; }
+        
+        public static Helmet instance { get; private set; }
+        
         private IMyEntity helmet = null;
         private IMyEntity characterEntity = null;
+        private MyCharacterDefinition characterDefinition = null;
+        private bool characterHasHelmet = true;
         private bool removedHelmet = false;
         private bool removedHUD = false;
         private bool warningBlinkOn = true;
@@ -58,8 +62,9 @@ namespace Digi.Helmet
         private long helmetBroken = 0;
         private bool prevHelmetOn = false;
         private long animationStart = 0;
-        
-        private float oldFov = 60;
+        private bool drawHelmet = false;
+        private bool helmetOn = false;
+        private bool inCockpit = false;
         
         public static Dictionary<long, IMyGravityGeneratorBase> gravityGenerators = new Dictionary<long, IMyGravityGeneratorBase>();
         private Vector3 artificialDir = Vector3.Zero;
@@ -70,6 +75,8 @@ namespace Digi.Helmet
         private float gravityForce = 0;
         private float altitude = 0;
         private float inventoryMass = 0;
+        
+        private float oldFov = 70;
         
         private IMyEntity vectorGravity = null;
         private IMyEntity vectorVelocity = null;
@@ -90,13 +97,14 @@ namespace Digi.Helmet
         public static IMyEntity holdingTool = null;
         public static MyObjectBuilderType holdingToolTypeId;
         
-        public IMyEntity[] iconEntities = new IMyEntity[Settings.TOTAL_ELEMENTS];
-        public IMyEntity[] iconBarEntities = new IMyEntity[Settings.TOTAL_ELEMENTS];
+        private IMyEntity[] iconEntities = new IMyEntity[Settings.TOTAL_ELEMENTS];
+        private IMyEntity[] iconBarEntities = new IMyEntity[Settings.TOTAL_ELEMENTS];
         
-        double lastLinearSpeed;
-        Vector3D lastDirSpeed;
+        private double lastLinearSpeed;
+        private Vector3D lastDirSpeed;
         
-        private int skipDisplay = 0;
+        private string lastDisplayText = null;
+        private short skipDisplay = 0;
         private float prevSpeed = 0;
         
         private float prevBattery = -1;
@@ -109,7 +117,6 @@ namespace Digi.Helmet
         private float etaO2 = 0;
         private float etaH = 0;
         
-        private StringBuilder str = new StringBuilder();
         private const string DISPLAY_PAD = " ";
         private const float DISPLAY_FONT_SIZE = 1.3f;
         private const string NUMBER_FORMAT = "###,###,##0";
@@ -121,11 +128,8 @@ namespace Digi.Helmet
         private Random rand = new Random();
         private Dictionary<string, int> components = new Dictionary<string, int>();
         private List<IMySlimBlock> blocks = new List<IMySlimBlock>();
+        private StringBuilder str = new StringBuilder();
         private StringBuilder tmp = new StringBuilder();
-        
-        public static bool displayUpdate = true;
-        public static string displayText = "";
-        private string lastDisplayText = null;
         
         private HashSet<MyStringHash> glassBreakCauses = new HashSet<MyStringHash>()
         {
@@ -173,18 +177,20 @@ namespace Digi.Helmet
         
         public void Init()
         {
+            Log.Init();
+            Log.Info("Initialized");
+            
+            instance = this;
             init = true;
             isServer = MyAPIGateway.Session.OnlineMode == MyOnlineModeEnum.OFFLINE || MyAPIGateway.Multiplayer.IsServer;
             isDedicated = (MyAPIGateway.Utilities.IsDedicated && isServer);
             
-            Log.Init();
-            Log.Info("Initialized");
-            
             if(!isDedicated)
             {
-                settings = new Settings();
+                if(!MyAPIGateway.Utilities.IsDedicated && !MyAPIGateway.Multiplayer.IsServer)
+                    MyAPIGateway.Entities.OnEntityAdd += EntityAdded;
                 
-                MyAPIGateway.Entities.OnEntityAdd += EntityAdded;
+                settings = new Settings();
                 MyAPIGateway.Utilities.MessageEntered += MessageEntered;
                 MyAPIGateway.Session.DamageSystem.RegisterDestroyHandler(999, EntityKilled);
             }
@@ -194,6 +200,8 @@ namespace Digi.Helmet
         {
             try
             {
+                instance = null;
+                
                 if(init)
                 {
                     init = false;
@@ -204,7 +212,9 @@ namespace Digi.Helmet
                     
                     if(!isDedicated)
                     {
-                        MyAPIGateway.Entities.OnEntityAdd -= EntityAdded;
+                        if(!MyAPIGateway.Utilities.IsDedicated && !MyAPIGateway.Multiplayer.IsServer)
+                            MyAPIGateway.Entities.OnEntityAdd -= EntityAdded;
+                        
                         MyAPIGateway.Utilities.MessageEntered -= MessageEntered;
                         
                         if(settings != null)
@@ -220,7 +230,6 @@ namespace Digi.Helmet
                 Log.Error(e);
             }
             
-            Log.Info("Mod unloaded.");
             Log.Close();
         }
         
@@ -255,14 +264,17 @@ namespace Digi.Helmet
         public override void UpdateAfterSimulation()
         {
             //bench_update.Start();
-            Update();
+            LogicUpdate();
             //bench_update.End();
         }
         
-        private void Update()
+        private void LogicUpdate()
         {
             if(isDedicated)
                 return;
+            
+            if(fatalError)
+                return; // stop trying if a fatal error occurs
             
             if(!init)
             {
@@ -282,294 +294,135 @@ namespace Digi.Helmet
             }
             
             tick++; // global update tick
+            drawHelmet = false;
+            HelmetLogicReturn ret = UpdateHelmetLogic();
             
-            if(characterEntity != null)
+            if(ret == HelmetLogicReturn.OK)
             {
-                if(characterEntity.MarkedForClose || characterEntity.Closed)
-                {
-                    characterEntity = null;
-                }
-                else if(settings.autoFovScale)
-                {
-                    if(tick % SKIP_TICKS_FOV == 0)
-                    {
-                        float fov = MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView);
-                        
-                        if(oldFov != fov)
-                        {
-                            settings.ScaleForFOV(fov);
-                            settings.Save();
-                            oldFov = fov;
-                        }
-                    }
-                }
+                drawHelmet = true;
             }
-            
+            else
+            {
+                RemoveHelmet(ret == HelmetLogicReturn.REMOVE_ALL);
+            }
+        }
+        
+        private enum HelmetLogicReturn
+        {
+            OK,
+            REMOVE_LEAVEHUD,
+            REMOVE_ALL,
+        }
+        
+        private HelmetLogicReturn UpdateHelmetLogic()
+        {
             var camera = MyAPIGateway.Session.CameraController;
             
-            if(camera != null && MyAPIGateway.Session.ControlledObject != null && MyAPIGateway.Session.ControlledObject.Entity != null)
+            if(camera == null || MyAPIGateway.Session.ControlledObject == null && MyAPIGateway.Session.ControlledObject.Entity == null)
+                return HelmetLogicReturn.REMOVE_ALL;
+            
+            if(characterEntity != null && (characterEntity.MarkedForClose || characterEntity.Closed))
             {
-                var contrEnt = MyAPIGateway.Session.ControlledObject.Entity;
-                bool attach = false;
-                
-                if(camera is IMyCharacter)
+                UpdateCharacterReference(null);
+            }
+            
+            var contrEnt = MyAPIGateway.Session.ControlledObject.Entity;
+            
+            if(camera is IMyCharacter)
+            {
+                UpdateCharacterReference(camera as IMyEntity);
+            }
+            else if(contrEnt is Ingame.IMyShipController && camera is Ingame.IMyShipController)
+            {
+                if(characterEntity == null && contrEnt.Hierarchy.Children.Count > 0)
                 {
-                    characterEntity = camera as IMyEntity;
-                    attach = true;
-                }
-                else if(contrEnt is Ingame.IMyShipController && camera is Ingame.IMyShipController)
-                {
-                    attach = true;
-                    
-                    if(characterEntity == null && contrEnt.Hierarchy.Children.Count > 0)
+                    foreach(var child in contrEnt.Hierarchy.Children)
                     {
-                        foreach(var child in contrEnt.Hierarchy.Children)
+                        if(child.Entity is IMyCharacter && child.Entity.DisplayName == MyAPIGateway.Session.Player.DisplayName)
                         {
-                            if(child.Entity is IMyCharacter && child.Entity.DisplayName == MyAPIGateway.Session.Player.DisplayName)
-                            {
-                                characterEntity = child.Entity;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if(settings.toggleHelmetInCockpit && characterEntity != null && contrEnt is Ingame.IMyCockpit)
-                    {
-                        if(MyGuiScreenGamePlay.ActiveGameplayScreen == null && MyGuiScreenTerminal.GetCurrentScreen() == MyTerminalPageEnum.None)
-                        {
-                            if(MyAPIGateway.Input.IsNewGameControlPressed(MyControlsSpace.HELMET))
-                            {
-                                (characterEntity as Sandbox.Game.Entities.IMyControllableEntity).SwitchHelmet();
-                            }
+                            UpdateCharacterReference(child.Entity);
+                            break;
                         }
                     }
                 }
                 
-                if(characterEntity != null)
+                if(settings.toggleHelmetInCockpit && characterEntity != null && contrEnt is Ingame.IMyCockpit)
                 {
-                    bool helmetOn = (characterEntity as IMyControllableEntity).EnabledHelmet;
-                    
-                    if(helmetOn != prevHelmetOn)
+                    if(MyGuiScreenGamePlay.ActiveGameplayScreen == null && MyGuiScreenTerminal.GetCurrentScreen() == MyTerminalPageEnum.None)
                     {
-                        if(settings.animateSpeed > 0)
-                            animationStart = DateTime.UtcNow.Ticks; // set start of animation here to avoid animating after going in first person
-                        else if(!helmetOn)
-                            RemoveHelmet(false);
-                        
-                        prevHelmetOn = helmetOn;
+                        if(MyAPIGateway.Input.IsNewGameControlPressed(MyControlsSpace.HELMET))
+                        {
+                            (characterEntity as Sandbox.Game.Entities.IMyControllableEntity).SwitchHelmet();
+                        }
                     }
                 }
-                
-                if(attach && camera.IsInFirstPersonView && AttachHelmet())
-                {
-                    return;
-                }
             }
-            
-            RemoveHelmet();
-        }
-        
-        private bool AttachHelmet()
-        {
-            var controllable = characterEntity as IMyControllableEntity;
-            
-            if(controllable != null)
-            {
-                // ignoring head Y axis on foot because of an issue with ALT and 3rd person camera bumping into the ground
-                bool inCockpit = !(MyAPIGateway.Session.CameraController is IMyCharacter); // (MyAPIGateway.Session.ControlledObject.Entity is IMyCockpit);
-                UpdateHelmetAt(MyAPIGateway.Session.ControlledObject.GetHeadMatrix(inCockpit, true));
-                return true;
-            }
-            
-            return false;
-        }
-        
-        private void RemoveHelmet(bool removeHud = true)
-        {
-            if(!removedHelmet)
-            {
-                removedHelmet = true;
-                
-                if(helmet != null)
-                {
-                    if(characterEntity != null)
-                        helmet.SetPosition(characterEntity.WorldMatrix.Translation + characterEntity.WorldMatrix.Backward * 1000);
-                    else
-                        helmet.SetPosition(Vector3D.Zero);
-                    
-                    helmet.Close();
-                    helmet = null;
-                    animationStart = 0;
-                }
-            }
-            
-            if(removeHud)
-                RemoveHud();
-        }
-        
-        private void RemoveHud()
-        {
-            if(removedHUD)
-                return;
-            
-            removedHUD = true;
-            Vector3D pos = Vector3D.Zero;
             
             if(characterEntity != null)
-                pos = characterEntity.WorldMatrix.Translation + characterEntity.WorldMatrix.Backward * 1000;
-            
-            for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
             {
-                if(iconEntities[id] != null)
+                if(!characterHasHelmet) // prevent crashes when using helmets on dogs/spiders/etc that have no OxygenComponent, would crash on respawn.
                 {
-                    iconEntities[id].SetPosition(pos);
-                    iconEntities[id].Close();
-                    iconEntities[id] = null;
+                    return HelmetLogicReturn.REMOVE_ALL;;
                 }
                 
-                if(id == Icons.VECTOR)
+                helmetOn = (characterEntity as IMyControllableEntity).EnabledHelmet;
+                
+                if(helmetOn != prevHelmetOn)
                 {
-                    if(vectorGravity != null)
-                    {
-                        vectorGravity.SetPosition(pos);
-                        vectorGravity.Close();
-                        vectorGravity = null;
-                    }
+                    prevHelmetOn = helmetOn;
                     
-                    if(vectorVelocity != null)
-                    {
-                        vectorVelocity.SetPosition(pos);
-                        vectorVelocity.Close();
-                        vectorVelocity = null;
-                    }
-                }
-                
-                if(iconBarEntities[id] != null)
-                {
-                    iconBarEntities[id].SetPosition(pos);
-                    iconBarEntities[id].Close();
-                    iconBarEntities[id] = null;
+                    if(settings.animateSpeed > 0)
+                        animationStart = DateTime.UtcNow.Ticks; // set start of animation here to avoid animating after going in first person
+                    else if(!helmetOn)
+                        return HelmetLogicReturn.REMOVE_LEAVEHUD;
                 }
             }
             
-            lastDisplayText = null;
-        }
-        
-        private void UpdateHelmetAt(MatrixD matrix)
-        {
-            try
+            if(!camera.IsInFirstPersonView || !(characterEntity is IMyControllableEntity))
+                return HelmetLogicReturn.REMOVE_ALL;
+            
+            if(settings.autoFovScale)
             {
-                if(fatalError)
-                    return; // stop trying if a fatal error occurs
-                
-                bool helmetOn = (characterEntity as IMyControllableEntity).EnabledHelmet;
-                bool brokenHelmet = (helmetBroken > 0 && helmetBroken == characterEntity.EntityId);
-                
-                if(helmetOn && brokenHelmet)
+                if(tick % SKIP_TICKS_FOV == 0)
                 {
-                    RemoveHelmet();
-                    helmetBroken = 0;
-                }
-                
-                if(helmetOn)
-                {
-                    // Spawn the helmet model if it's not spawned
-                    if(brokenHelmet || (helmet == null && settings.helmetModel != null))
-                    {
-                        helmet = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HELMET_PREFIX + (brokenHelmet ? CUBE_HELMET_BROKEN_SUFFIX : settings.GetHelmetModel()));
-                        
-                        if(helmet == null)
-                        {
-                            Log.Error("Couldn't load the helmet prefab!");
-                            fatalError = true;
-                            return;
-                        }
-                    }
-                }
-                
-                if(!(MyAPIGateway.Session.CameraController is Ingame.IMyCockpit)) // No smoothing when camera is in cockpit/passenger seat because it already has smoothing
-                {
-                    if(settings.delayedRotation > 0)
-                    {
-                        double lenDiff = (lastMatrix.Forward - matrix.Forward).Length() * 4 * settings.delayedRotation;
-                        double amount = MathHelper.Clamp(lenDiff, 0.25, 1.0);
-                        
-                        double linearSpeed = (lastMatrix.Translation - matrix.Translation).Length();
-                        double linearAccel = lastLinearSpeed - linearSpeed;
-                        
-                        Vector3D dirSpeed = (lastMatrix.Translation - matrix.Translation);
-                        Vector3D dirAccel = (lastDirSpeed - dirSpeed);
-                        
-                        double accel = dirAccel.Length();
-                        
-                        lastDirSpeed = dirSpeed;
-                        lastLinearSpeed = linearSpeed;
-                        
-                        double minMax = 0.005;
-                        double posAmount = MathHelper.Clamp(accel / 10, 0.01, 1.0);
-                        
-                        matrix.M11 = lastMatrix.M11 + (matrix.M11 - lastMatrix.M11) * amount;
-                        matrix.M12 = lastMatrix.M12 + (matrix.M12 - lastMatrix.M12) * amount;
-                        matrix.M13 = lastMatrix.M13 + (matrix.M13 - lastMatrix.M13) * amount;
-                        matrix.M14 = lastMatrix.M14 + (matrix.M14 - lastMatrix.M14) * amount;
-                        matrix.M21 = lastMatrix.M21 + (matrix.M21 - lastMatrix.M21) * amount;
-                        matrix.M22 = lastMatrix.M22 + (matrix.M22 - lastMatrix.M22) * amount;
-                        matrix.M23 = lastMatrix.M23 + (matrix.M23 - lastMatrix.M23) * amount;
-                        matrix.M24 = lastMatrix.M24 + (matrix.M24 - lastMatrix.M24) * amount;
-                        matrix.M31 = lastMatrix.M31 + (matrix.M31 - lastMatrix.M31) * amount;
-                        matrix.M32 = lastMatrix.M32 + (matrix.M32 - lastMatrix.M32) * amount;
-                        matrix.M33 = lastMatrix.M33 + (matrix.M33 - lastMatrix.M33) * amount;
-                        matrix.M34 = lastMatrix.M34 + (matrix.M34 - lastMatrix.M34) * amount;
-                        
-                        matrix.M41 = matrix.M41 + MathHelper.Clamp((lastMatrix.M41 - matrix.M41) * posAmount, -minMax, minMax);
-                        matrix.M42 = matrix.M42 + MathHelper.Clamp((lastMatrix.M42 - matrix.M42) * posAmount, -minMax, minMax);
-                        matrix.M43 = matrix.M43 + MathHelper.Clamp((lastMatrix.M43 - matrix.M43) * posAmount, -minMax, minMax);
-                        
-                        matrix.M44 = lastMatrix.M44 + (matrix.M44 - lastMatrix.M44) * amount;
-                        
-                        lastMatrix = matrix;
-                    }
-                }
-                
-                // Align the helmet mesh
-                if(helmet != null)
-                {
-                    helmetMatrix = matrix;
-                    helmetMatrix.Translation += matrix.Forward * (SCALE_DIST_ADJUST * (1.0 - settings.scale));
+                    float fov = MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView);
                     
-                    if(animationStart > 0)
+                    if(oldFov != fov)
                     {
-                        float tickDiff = (float)MathHelper.Clamp((DateTime.UtcNow.Ticks - animationStart) / (TimeSpan.TicksPerMillisecond * settings.animateSpeed * 1000), 0, 1);
-                        
-                        if(tickDiff == 1)
-                        {
-                            animationStart = 0;
-                            
-                            if(!helmetOn)
-                                RemoveHelmet(false);
-                            
-                            return;
-                        }
-                        
-                        var toMatrix = MatrixD.CreateWorld(helmetMatrix.Translation + helmetMatrix.Up * 0.5, helmetMatrix.Up, helmetMatrix.Backward);
-                        
-                        if(helmetOn)
-                            helmetMatrix = MatrixD.Slerp(toMatrix, helmetMatrix, tickDiff);
-                        else
-                            helmetMatrix = MatrixD.Slerp(helmetMatrix, toMatrix, tickDiff);
+                        settings.ScaleForFOV(fov);
+                        settings.Save();
+                        oldFov = fov;
                     }
-                    
-                    helmet.SetWorldMatrix(helmetMatrix);
-                    removedHelmet = false;
                 }
-                
-                // if HUD is disabled or we can't get the info, remove the HUD (if exists) and stop here
-                if(!settings.hud) // || (!helmetOn && !settings.hudAlways)) // || characterObject == null)
+            }
+            
+            inCockpit = (MyAPIGateway.Session.CameraController is Ingame.IMyCockpit);
+            bool brokenHelmet = (helmetBroken > 0 && helmetBroken == characterEntity.EntityId);
+            
+            if(helmetOn && brokenHelmet)
+            {
+                helmetBroken = 0;
+                RemoveHelmet(); // don't return, only refresh helmet meshe
+            }
+            
+            if(helmetOn)
+            {
+                // Spawn the helmet model if it's not spawned
+                if(brokenHelmet || (helmet == null && settings.helmetModel != null))
                 {
-                    RemoveHud();
-                    return;
+                    helmet = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HELMET_PREFIX + (brokenHelmet ? CUBE_HELMET_BROKEN_SUFFIX : settings.GetHelmetModel()));
+                    
+                    if(helmet == null)
+                    {
+                        Log.Error("Couldn't load the helmet prefab!");
+                        fatalError = true;
+                        return HelmetLogicReturn.REMOVE_ALL;
+                    }
                 }
-                
+            }
+            
+            if(settings.hud)
+            {
                 var c = MyHud.CharacterInfo;
                 
                 if(tick % SKIP_TICKS_HUD == 0)
@@ -661,45 +514,114 @@ namespace Digi.Helmet
                     var controller = MyAPIGateway.Session.ControlledObject as MyShipController;
                     show[Icons.HORIZON] = ((naturalForce > 0 && controller != null && controller.HorizonIndicatorEnabled) ? 1 : 0);
                 }
+            }
+            else
+            {
+                RemoveHud();
+            }
+            
+            return HelmetLogicReturn.OK;
+        }
+        
+        private void UpdateCharacterReference(IMyEntity ent)
+        {
+            characterEntity = ent;
+            characterDefinition = null;
+            characterHasHelmet = true;
+            
+            if(ent != null)
+            {
+                var obj = ent.GetObjectBuilder(false) as MyObjectBuilder_Character;
                 
-                matrix.Translation += matrix.Forward * (HUDSCALE_DIST_ADJUST * (1.0 - settings.hudScale)); // off-set the HUD according to the HUD scale
-                var headPos = matrix.Translation + (matrix.Backward * 0.25); // for glass curve effect
-                bool hudVisible = !MyHud.MinimalHud; // if the vanilla HUD is on or off
-                removedHUD = false; // mark the HUD as not removed because we're about to spawn it
+                if(obj == null)
+                    return;
                 
-                // spawn and update the HUD elements
-                for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
+                if(MyDefinitionManager.Static.Characters.TryGetValue(obj.CharacterModel, out characterDefinition))
                 {
-                    bool showIcon = false;
-                    
-                    switch(show[id])
-                    {
-                        case 1:
-                            showIcon = helmetOn || animationStart != 0;
-                            break;
-                        case 2:
-                            showIcon = !helmetOn;
-                            break;
-                        case 3:
-                            showIcon = true;
-                            break;
-                    }
-                    
-                    if(showIcon)
-                    {
-                        switch(settings.elements[id].hudMode)
-                        {
-                            case 1:
-                                showIcon = hudVisible;
-                                break;
-                            case 2:
-                                showIcon = !hudVisible;
-                                break;
-                        }
-                    }
-                    
-                    UpdateIcon(matrix, headPos, id, showIcon, values[id]);
+                    characterHasHelmet = (characterDefinition.SuitResourceStorage != null && characterDefinition.SuitResourceStorage.Count > 0);
                 }
+            }
+        }
+        
+        private void RemoveHelmet(bool removeHud = true)
+        {
+            if(!removedHelmet)
+            {
+                removedHelmet = true;
+                
+                if(helmet != null)
+                {
+                    if(characterEntity != null)
+                        helmet.SetPosition(characterEntity.WorldMatrix.Translation + characterEntity.WorldMatrix.Backward * 1000);
+                    else
+                        helmet.SetPosition(Vector3D.Zero);
+                    
+                    helmet.Close();
+                    helmet = null;
+                    animationStart = 0;
+                }
+            }
+            
+            if(removeHud)
+                RemoveHud();
+        }
+        
+        private void RemoveHud()
+        {
+            if(removedHUD)
+                return;
+            
+            removedHUD = true;
+            Vector3D pos = Vector3D.Zero;
+            
+            if(characterEntity != null)
+                pos = characterEntity.WorldMatrix.Translation + characterEntity.WorldMatrix.Backward * 1000;
+            
+            for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
+            {
+                if(iconEntities[id] != null)
+                {
+                    iconEntities[id].SetPosition(pos);
+                    iconEntities[id].Close();
+                    iconEntities[id] = null;
+                }
+                
+                if(id == Icons.VECTOR)
+                {
+                    if(vectorGravity != null)
+                    {
+                        vectorGravity.SetPosition(pos);
+                        vectorGravity.Close();
+                        vectorGravity = null;
+                    }
+                    
+                    if(vectorVelocity != null)
+                    {
+                        vectorVelocity.SetPosition(pos);
+                        vectorVelocity.Close();
+                        vectorVelocity = null;
+                    }
+                }
+                
+                if(iconBarEntities[id] != null)
+                {
+                    iconBarEntities[id].SetPosition(pos);
+                    iconBarEntities[id].Close();
+                    iconBarEntities[id] = null;
+                }
+            }
+            
+            lastDisplayText = null;
+        }
+        
+        public override void Draw()
+        {
+            try
+            {
+                if(!init || !drawHelmet)
+                    return;
+                
+                DrawHelmet(MyAPIGateway.Session.Camera.WorldMatrix);
             }
             catch(Exception e)
             {
@@ -707,1188 +629,420 @@ namespace Digi.Helmet
             }
         }
         
+        private void DrawHelmet(MatrixD matrix)
+        {
+            if(settings.delayedRotation > 0)
+            {
+                double lenDiff = (lastMatrix.Forward - matrix.Forward).Length() * 4 * settings.delayedRotation;
+                double amount = MathHelper.Clamp(lenDiff, 0.25, 1.0);
+                
+                double linearSpeed = (lastMatrix.Translation - matrix.Translation).Length();
+                double linearAccel = lastLinearSpeed - linearSpeed;
+                
+                Vector3D dirSpeed = (lastMatrix.Translation - matrix.Translation);
+                Vector3D dirAccel = (lastDirSpeed - dirSpeed);
+                
+                double accel = dirAccel.Length();
+                
+                lastDirSpeed = dirSpeed;
+                lastLinearSpeed = linearSpeed;
+                
+                double minMax = 0.005;
+                double posAmount = MathHelper.Clamp(accel / 10, 0.01, 1.0);
+                
+                matrix.M11 = lastMatrix.M11 + (matrix.M11 - lastMatrix.M11) * amount;
+                matrix.M12 = lastMatrix.M12 + (matrix.M12 - lastMatrix.M12) * amount;
+                matrix.M13 = lastMatrix.M13 + (matrix.M13 - lastMatrix.M13) * amount;
+                matrix.M14 = lastMatrix.M14 + (matrix.M14 - lastMatrix.M14) * amount;
+                matrix.M21 = lastMatrix.M21 + (matrix.M21 - lastMatrix.M21) * amount;
+                matrix.M22 = lastMatrix.M22 + (matrix.M22 - lastMatrix.M22) * amount;
+                matrix.M23 = lastMatrix.M23 + (matrix.M23 - lastMatrix.M23) * amount;
+                matrix.M24 = lastMatrix.M24 + (matrix.M24 - lastMatrix.M24) * amount;
+                matrix.M31 = lastMatrix.M31 + (matrix.M31 - lastMatrix.M31) * amount;
+                matrix.M32 = lastMatrix.M32 + (matrix.M32 - lastMatrix.M32) * amount;
+                matrix.M33 = lastMatrix.M33 + (matrix.M33 - lastMatrix.M33) * amount;
+                matrix.M34 = lastMatrix.M34 + (matrix.M34 - lastMatrix.M34) * amount;
+                
+                matrix.M41 = matrix.M41 + MathHelper.Clamp((lastMatrix.M41 - matrix.M41) * posAmount, -minMax, minMax);
+                matrix.M42 = matrix.M42 + MathHelper.Clamp((lastMatrix.M42 - matrix.M42) * posAmount, -minMax, minMax);
+                matrix.M43 = matrix.M43 + MathHelper.Clamp((lastMatrix.M43 - matrix.M43) * posAmount, -minMax, minMax);
+                
+                matrix.M44 = lastMatrix.M44 + (matrix.M44 - lastMatrix.M44) * amount;
+                
+                lastMatrix = matrix;
+            }
+            
+            // Align the helmet mesh
+            if(helmet != null)
+            {
+                helmetMatrix = matrix;
+                helmetMatrix.Translation += matrix.Forward * (SCALE_DIST_ADJUST * (1.0 - settings.scale));
+                
+                if(animationStart > 0)
+                {
+                    float tickDiff = (float)MathHelper.Clamp((DateTime.UtcNow.Ticks - animationStart) / (TimeSpan.TicksPerMillisecond * settings.animateSpeed * 1000), 0, 1);
+                    
+                    if(tickDiff == 1)
+                    {
+                        animationStart = 0;
+                        
+                        if(!helmetOn)
+                            RemoveHelmet(false);
+                        
+                        return;
+                    }
+                    
+                    var toMatrix = MatrixD.CreateWorld(helmetMatrix.Translation + helmetMatrix.Up * 0.5, helmetMatrix.Up, helmetMatrix.Backward);
+                    
+                    if(helmetOn)
+                        helmetMatrix = MatrixD.Slerp(toMatrix, helmetMatrix, tickDiff);
+                    else
+                        helmetMatrix = MatrixD.Slerp(helmetMatrix, toMatrix, tickDiff);
+                }
+                
+                helmet.SetWorldMatrix(helmetMatrix);
+                removedHelmet = false;
+            }
+            
+            // if HUD is disabled or we can't get the info, remove the HUD (if exists) and stop here
+            if(!settings.hud) // || (!helmetOn && !settings.hudAlways)) // || characterObject == null)
+                return;
+            
+            matrix.Translation += matrix.Forward * (HUDSCALE_DIST_ADJUST * (1.0 - settings.hudScale)); // off-set the HUD according to the HUD scale
+            var headPos = matrix.Translation + (matrix.Backward * 0.25); // for glass curve effect
+            bool hudVisible = !MyHud.MinimalHud; // if the vanilla HUD is on or off
+            removedHUD = false; // mark the HUD as not removed because we're about to spawn it
+            
+            // spawn and update the HUD elements
+            for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
+            {
+                bool showIcon = false;
+                
+                switch(show[id])
+                {
+                    case 1:
+                        showIcon = helmetOn || animationStart != 0;
+                        break;
+                    case 2:
+                        showIcon = !helmetOn;
+                        break;
+                    case 3:
+                        showIcon = true;
+                        break;
+                }
+                
+                if(showIcon)
+                {
+                    switch(settings.elements[id].hudMode)
+                    {
+                        case 1:
+                            showIcon = hudVisible;
+                            break;
+                        case 2:
+                            showIcon = !hudVisible;
+                            break;
+                    }
+                }
+                
+                UpdateIcon(matrix, headPos, id, showIcon, values[id]);
+            }
+        }
+        
         private void UpdateIcon(MatrixD matrix, Vector3D headPos, int id, bool show, float percent)
         {
-            try
+            HudElement element = settings.elements[id];
+            
+            // if the element should be hidden, take action!
+            if(!show)
             {
-                HudElement element = settings.elements[id];
-                
-                // if the element should be hidden, take action!
-                if(!show)
+                // remove the element itself if it exists
+                if(iconEntities[id] != null)
                 {
-                    // remove the element itself if it exists
-                    if(iconEntities[id] != null)
-                    {
-                        iconEntities[id].SetPosition(matrix.Translation + matrix.Backward * 1000);
-                        iconEntities[id].Close();
-                        iconEntities[id] = null;
-                    }
-                    
-                    if(id == Icons.WARNING)
-                        warningBlinkOn = true; // reset the blink status for the warning icon
-                    
-                    // remove the bar if it has one and it exists
-                    if(element.hasBar && iconBarEntities[id] != null)
-                    {
-                        iconBarEntities[id].SetPosition(matrix.Translation + matrix.Backward * 1000);
-                        iconBarEntities[id].Close();
-                        iconBarEntities[id] = null;
-                    }
-                    
-                    if(id == Icons.VECTOR)
-                    {
-                        if(vectorGravity != null)
-                        {
-                            vectorGravity.SetPosition(matrix.Translation + matrix.Backward * 1000);
-                            vectorGravity.Close();
-                            vectorGravity = null;
-                        }
-                        
-                        if(vectorVelocity != null)
-                        {
-                            vectorVelocity.SetPosition(matrix.Translation + matrix.Backward * 1000);
-                            vectorVelocity.Close();
-                            vectorVelocity = null;
-                        }
-                    }
-                    
-                    return; // and STOP!
+                    iconEntities[id].SetPosition(matrix.Translation + matrix.Backward * 1000);
+                    iconEntities[id].Close();
+                    iconEntities[id] = null;
                 }
                 
-                if(id != Icons.DISPLAY)
+                if(id == Icons.WARNING)
+                    warningBlinkOn = true; // reset the blink status for the warning icon
+                
+                // remove the bar if it has one and it exists
+                if(element.hasBar && iconBarEntities[id] != null)
                 {
-                    if(animationStart > 0)
-                    {
-                        float tickDiff = (float)Math.Min((DateTime.UtcNow.Ticks - animationStart) / (TimeSpan.TicksPerMillisecond * settings.animateSpeed * 1000), 1);
-                        var toMatrix = MatrixD.CreateWorld(matrix.Translation + matrix.Up * 0.5, matrix.Up, matrix.Backward);
-                        
-                        if((characterEntity as IMyControllableEntity).EnabledHelmet)
-                            matrix = MatrixD.Slerp(toMatrix, matrix, tickDiff);
-                        else
-                            matrix = MatrixD.Slerp(matrix, toMatrix, tickDiff);
-                    }
+                    iconBarEntities[id].SetPosition(matrix.Translation + matrix.Backward * 1000);
+                    iconBarEntities[id].Close();
+                    iconBarEntities[id] = null;
                 }
                 
-                // append the oxygen level number to the name and remove the previous entity if changed
-                if(id == Icons.OXYGEN_ENV)
-                {
-                    int oxygenEnv = MathHelper.Clamp((int)percent, 0, 2);
-                    
-                    if(iconEntities[id] != null && lastOxygenEnv != oxygenEnv)
-                    {
-                        iconEntities[id].Close();
-                        iconEntities[id] = null;
-                    }
-                    
-                    lastOxygenEnv = oxygenEnv;
-                }
-                
-                // spawn the element if it's not already
-                if(iconEntities[id] == null)
-                {
-                    if(id == Icons.DISPLAY)
-                    {
-                        iconEntities[id] = SpawnPrefab(CUBE_HUD_PREFIX + element.name + (settings.displayQuality == 0 ? "Low" : ""), true);
-                        lastDisplayText = null; // force first write
-                    }
-                    else
-                    {
-                        string name = element.name;
-                        
-                        // append the oxygen level number to the name and remove the previous entity if changed
-                        if(id == Icons.OXYGEN_ENV)
-                        {
-                            int oxygenEnv = MathHelper.Clamp((int)percent, 0, 2);
-                            name += oxygenEnv.ToString();
-                        }
-                        
-                        iconEntities[id] = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HUD_PREFIX + name);
-                    }
-                    
-                    if(iconEntities[id] == null)
-                        return;
-                }
-                
-                // blink the warning icon by moving it out of view and back in view
-                if(id == Icons.WARNING && !warningBlinkOn)
-                {
-                    matrix.Translation += (matrix.Backward * 10);
-                    iconEntities[id].SetWorldMatrix(matrix);
-                    return;
-                }
-                
-                // update the vector indicator
                 if(id == Icons.VECTOR)
                 {
-                    var vel = characterEntity.Physics.LinearVelocity;
-                    
-                    if(MyAPIGateway.Session.ControlledObject is Ingame.IMyCockpit)
-                    {
-                        var grid = (MyAPIGateway.Session.ControlledObject as Ingame.IMyCockpit).CubeGrid;
-                        
-                        if(grid.Physics != null)
-                            vel = grid.Physics.LinearVelocity;
-                    }
-                    
-                    var velL = Math.Round(vel.Length(), 2);
-                    
-                    bool inGravity = gravityForce > 0;
-                    bool isMoving = velL > 0;
-                    
-                    if(inGravity)
-                    {
-                        if(vectorGravity == null)
-                        {
-                            vectorGravity = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HUD_PREFIX + "vectorGravity");
-                        }
-                    }
-                    else
-                    {
-                        if(vectorGravity != null)
-                        {
-                            vectorGravity.SetPosition(matrix.Translation + matrix.Backward * 1000);
-                            vectorGravity.Close();
-                            vectorGravity = null;
-                        }
-                    }
-                    
-                    if(isMoving)
-                    {
-                        if(vectorVelocity == null)
-                        {
-                            vectorVelocity = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HUD_PREFIX + "vectorVelocity");
-                        }
-                    }
-                    else
-                    {
-                        if(vectorVelocity != null)
-                        {
-                            vectorVelocity.SetPosition(matrix.Translation + matrix.Backward * 1000);
-                            vectorVelocity.Close();
-                            vectorVelocity = null;
-                        }
-                    }
-                    
-                    // TODO optimize ?!
-                    
-                    matrix.Translation += matrix.Forward * 0.05;
-                    headPos += matrix.Forward * 0.22;
-                    
-                    var dirV = Vector3D.Normalize(headPos - (matrix.Translation + matrix.Up * element.posUp));
-                    var dirH = Vector3D.Normalize(headPos - (matrix.Translation + matrix.Left * element.posLeft));
-                    
-                    matrix.Translation += (matrix.Left * element.posLeft) + (matrix.Up * element.posUp);
-                    
-                    iconEntities[id].SetWorldMatrix(matrix);
-                    
-                    if(vectorGravity == null && vectorVelocity == null)
-                        return;
-                    
-                    float angV = (float)Math.Acos(Math.Round(Vector3D.Dot(matrix.Backward, dirV), 4));
-                    float angH = (float)Math.Acos(Math.Round(Vector3D.Dot(matrix.Backward, dirH), 4));
-                    
-                    if(element.posUp > 0)
-                        angV = -angV;
-                    
-                    if(element.posLeft < 0)
-                        angH = -angH;
-                    
-                    var offsetV = MatrixD.CreateFromAxisAngle(matrix.Left, angV);
-                    var offsetH = MatrixD.CreateFromAxisAngle(matrix.Up, angH);
-                    
                     if(vectorGravity != null)
                     {
-                        var matrixGravity = matrix;
-                        
-                        AlignToVector(ref matrixGravity, gravityDir);
-                        
-                        matrixGravity *= offsetV * offsetH;
-                        
-                        var zScale = MathHelper.Clamp(gravityForce, 0, 3);
-                        var xyScale = MathHelper.Clamp(zScale, 0.5, 1.0);
-                        var vectorScale = new Vector3D(xyScale, xyScale, zScale);
-                        MatrixD.Rescale(ref matrixGravity, ref vectorScale);
-                        
-                        matrixGravity.Translation = matrix.Translation;
-                        
-                        vectorGravity.SetWorldMatrix(matrixGravity);
+                        vectorGravity.SetPosition(matrix.Translation + matrix.Backward * 1000);
+                        vectorGravity.Close();
+                        vectorGravity = null;
                     }
                     
                     if(vectorVelocity != null)
                     {
-                        var matrixVelocity = matrix;
-                        
-                        var num = 1.0f / velL;
-                        var velN = new Vector3(vel.X * num, vel.Y * num, vel.Z * num);
-                        
-                        AlignToVector(ref matrixVelocity, velN);
-                        
-                        matrixVelocity *= offsetV * offsetH;
-                        
-                        var zScale = MathHelper.Clamp(velL / 50, 0, 3);
-                        var xyScale = MathHelper.Clamp(zScale, 0.5, 1.0);
-                        var vectorScale = new Vector3D(xyScale, xyScale, zScale);
-                        MatrixD.Rescale(ref matrixVelocity, ref vectorScale);
-                        
-                        matrixVelocity.Translation = matrix.Translation;
-                        
-                        vectorVelocity.SetWorldMatrix(matrixVelocity);
+                        vectorVelocity.SetPosition(matrix.Translation + matrix.Backward * 1000);
+                        vectorVelocity.Close();
+                        vectorVelocity = null;
                     }
-                    
-                    return;
                 }
                 
-                // more curvature for the display
-                if(id == Icons.DISPLAY)
-                    headPos += matrix.Forward * 0.23;
-                
-                // horizon crosshair is always centered, no reason to apply TransformHUD()
-                if(id == Icons.HORIZON)
+                return; // and STOP!
+            }
+            
+            // helmet on/off animation for everything except display
+            if(id != Icons.DISPLAY)
+            {
+                if(animationStart > 0)
                 {
-                    matrix.Translation += matrix.Forward * 0.02; // TODO fix the whiteness issue with horizon indicator and remove this afterwards
+                    float tickDiff = (float)Math.Min((DateTime.UtcNow.Ticks - animationStart) / (TimeSpan.TicksPerMillisecond * settings.animateSpeed * 1000), 1);
+                    var toMatrix = MatrixD.CreateWorld(matrix.Translation + matrix.Up * 0.5, matrix.Up, matrix.Backward);
+                    
+                    if((characterEntity as IMyControllableEntity).EnabledHelmet)
+                        matrix = MatrixD.Slerp(toMatrix, matrix, tickDiff);
+                    else
+                        matrix = MatrixD.Slerp(matrix, toMatrix, tickDiff);
+                }
+            }
+            
+            // append the oxygen level number to the name and remove the previous entity if changed
+            if(id == Icons.OXYGEN_ENV)
+            {
+                int oxygenEnv = MathHelper.Clamp((int)percent, 0, 2);
+                
+                if(iconEntities[id] != null && lastOxygenEnv != oxygenEnv)
+                {
+                    iconEntities[id].Close();
+                    iconEntities[id] = null;
+                }
+                
+                lastOxygenEnv = oxygenEnv;
+            }
+            
+            // spawn the element if it's not already
+            if(iconEntities[id] == null)
+            {
+                if(id == Icons.DISPLAY)
+                {
+                    iconEntities[id] = SpawnPrefab(CUBE_HUD_PREFIX + element.name + (settings.displayQuality == 0 ? "Low" : ""), true);
+                    lastDisplayText = null; // force first write
                 }
                 else
                 {
-                    matrix.Translation += (matrix.Left * element.posLeft) + (matrix.Up * element.posUp);
+                    string name = element.name;
                     
-                    // align the element to the view and give it the glass curve
-                    TransformHUD(ref matrix, matrix.Translation + matrix.Forward * 0.05, headPos, -matrix.Up, matrix.Forward);
+                    // append the oxygen level number to the name and remove the previous entity if changed
+                    if(id == Icons.OXYGEN_ENV)
+                    {
+                        int oxygenEnv = MathHelper.Clamp((int)percent, 0, 2);
+                        name += oxygenEnv.ToString();
+                    }
+                    
+                    iconEntities[id] = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HUD_PREFIX + name);
                 }
                 
+                if(iconEntities[id] == null)
+                    return;
+            }
+            
+            // blink the warning icon by moving it out of view and back in view instead of reallocating memory by deleting/readding it
+            if(id == Icons.WARNING && !warningBlinkOn)
+            {
+                matrix.Translation += (matrix.Backward * 10);
                 iconEntities[id].SetWorldMatrix(matrix);
+                return;
+            }
+            
+            // update the vector indicator
+            if(id == Icons.VECTOR)
+            {
+                var vel = characterEntity.Physics.LinearVelocity;
                 
-                // update the display
-                if(id == Icons.DISPLAY)
+                if(MyAPIGateway.Session.ControlledObject is Ingame.IMyCockpit)
                 {
-                    if(++skipDisplay % (60 / settings.displayUpdateRate) == 0)
+                    var grid = (MyAPIGateway.Session.ControlledObject as Ingame.IMyCockpit).CubeGrid;
+                    
+                    if(grid.Physics != null)
+                        vel = grid.Physics.LinearVelocity;
+                }
+                
+                var velL = Math.Round(vel.Length(), 2);
+                
+                bool inGravity = gravityForce > 0;
+                bool isMoving = velL > 0;
+                
+                if(inGravity)
+                {
+                    if(vectorGravity == null)
                     {
-                        skipDisplay = 0;
-                        var ghostGrid = iconEntities[id] as IMyCubeGrid;
-                        var lcdSlim = ghostGrid.GetCubeBlock(Vector3I.Zero);
-                        
-                        if(lcdSlim == null)
-                        {
-                            Log.Error("Can't find LCD in the grid!");
-                            return;
-                        }
-                        
-                        var lcd = lcdSlim.FatBlock as Ingame.IMyTextPanel;
-                        
-                        if(tick % SKIP_TICKS_HUD == 0)
-                        {
-                            if(settings.displayBorderColor.HasValue)
-                            {
-                                if(Vector3.DistanceSquared(lcdSlim.GetColorMask(), settings.displayBorderColor.Value) > 0.01f)
-                                {
-                                    ghostGrid.ColorBlocks(Vector3I.Zero, Vector3I.Zero, settings.displayBorderColor.Value);
-                                    lastDisplayText = null; // force rewrite
-                                }
-                            }
-                            else
-                            {
-                                var charColor = characterEntity.Render.ColorMaskHsv;
-                                
-                                if(Vector3.DistanceSquared(lcdSlim.GetColorMask(), charColor) > 0.01f)
-                                {
-                                    ghostGrid.ColorBlocks(Vector3I.Zero, Vector3I.Zero, charColor);
-                                    lastDisplayText = null; // force rewrite
-                                }
-                            }
-                        }
-                        
-                        str.Clear();
-                        
-                        if(MyHud.CharacterInfo.HealthRatio <= 0)
-                        {
-                            str.Append(DISPLAY_PAD).Append("ERROR #404:").AppendLine();
-                            str.Append(DISPLAY_PAD).Append("USER LIFESIGNS NOT FOUND.").AppendLine();
-                        }
-                        else try
-                        {
-                            bool inShip = MyHud.ShipInfo.Visible;
-                            float speed = 0;
-                            float accel = 0;
-                            char accelSymbol = '-';
-                            int battery = (int)MyHud.CharacterInfo.BatteryEnergy;
-                            
-                            if(inShip)
-                            {
-                                var block = MyAPIGateway.Session.ControlledObject.Entity as IMyCubeBlock;
-                                
-                                if(block != null && block.CubeGrid != null && block.CubeGrid.Physics != null)
-                                {
-                                    speed = (float)Math.Round(block.CubeGrid.Physics.LinearVelocity.Length(), 2);
-                                    
-                                    if(speed > 0)
-                                        accel = (float)Math.Round(block.CubeGrid.Physics.LinearAcceleration.Length(), 2);
-                                    else
-                                        accel = 0;
-                                }
-                            }
-                            else
-                            {
-                                var player = MyAPIGateway.Session.ControlledObject.Entity;
-                                
-                                if(player != null && player.Physics != null)
-                                {
-                                    speed = (float)Math.Round(player.Physics.LinearVelocity.Length(), 2);
-                                    
-                                    if(speed > 0)
-                                        accel = (float)Math.Round(player.Physics.LinearAcceleration.Length(), 2);
-                                    else
-                                        accel = 0;
-                                }
-                            }
-                            
-                            if(speed >= prevSpeed)
-                                accelSymbol = '+';
-                            
-                            prevSpeed = speed;
-                            string unit = "m/s";
-                            
-                            if(settings.displaySpeedUnit == SpeedUnits.kph)
-                            {
-                                speed *= 3.6f;
-                                unit = "km/h";
-                            }
-                            
-                            str.Append(DISPLAY_PAD).Append("Speed: ").Append(speed.ToString(FLOAT_FORMAT)).Append(unit).Append(" (").Append(accelSymbol).Append(accel.ToString(FLOAT_FORMAT)).Append(unit).Append(")").AppendLine();
-                            
-                            str.Append(DISPLAY_PAD).Append("Altitude: ");
-                            
-                            if(naturalForce > 0)
-                                str.Append(altitude.ToString(FLOAT_FORMAT)).Append("m");
-                            else
-                                str.Append("N/A");
-                            
-                            str.AppendLine();
-                            
-                            str.Append(DISPLAY_PAD).Append("Gravity: ");
-                            if(gravityForce > 0)
-                                str.Append(Math.Round(naturalForce, 2)).Append("g natural, ").Append(Math.Round(artificialForce, 2)).Append("g artif.");
-                            else
-                                str.Append("None");
-                            str.AppendLine();
-                            
-                            if(inShip)
-                            {
-                                var s = MyHud.ShipInfo;
-                                str.Append(DISPLAY_PAD).Append("Ship mass: ");
-                                
-                                if(s.Mass > 1000000)
-                                    str.Append((s.Mass / 100000f).ToString(FLOAT_FORMAT)).Append(" tonnes");
-                                else
-                                    str.Append(s.Mass.ToString(FLOAT_FORMAT)).Append(" kg");
-                                
-                                str.AppendLine();
-                                
-                                str.Append(DISPLAY_PAD).Append("Power: ");
-                                
-                                if(s.ResourceState == MyResourceStateEnum.NoPower)
-                                {
-                                    str.Append("No power");
-                                }
-                                else
-                                {
-                                    if(s.ResourceState == MyResourceStateEnum.OverloadBlackout)
-                                        str.Append("Overload");
-                                    else
-                                        str.Append(Math.Floor(s.PowerUsage * 100)).Append("%");
-                                    
-                                    str.Append(" (");
-                                    MyValueFormatter.AppendTimeInBestUnit(s.FuelRemainingTime * 3600f, str);
-                                    str.Append(")");
-                                }
-                                
-                                str.AppendLine();
-                                str.Append(DISPLAY_PAD).Append("Landing gears: ").Append(s.LandingGearsInProximity).Append(" / ").Append(s.LandingGearsLocked).Append(" / ").Append(s.LandingGearsTotal).AppendLine();
-                            }
-                            else
-                            {
-                                str.Append(DISPLAY_PAD).Append("Inventory: ").Append(Math.Round((float)MyHud.CharacterInfo.InventoryVolume * 1000, 2).ToString(FLOAT_FORMAT)).Append(" L (").Append(Math.Round(inventoryMass, 2).ToString(FLOAT_FORMAT)).Append(" kg)").AppendLine();
-                                
-                                float mass = MyHud.CharacterInfo.Mass;
-                                
-                                if(characterEntity != null && characterEntity.Physics != null)
-                                    mass = characterEntity.Physics.Mass + inventoryMass;
-                                
-                                str.Append(DISPLAY_PAD).Append("Mass: ").Append(mass.ToString(FLOAT_FORMAT)).Append(" kg").AppendLine();
-                                
-                                str.Append(DISPLAY_PAD);
-                                
-                                if(MyAPIGateway.Session.CreativeMode)
-                                {
-                                    str.Append("No resource is being drained.");
-                                }
-                                else
-                                {
-                                    float power = MyHud.CharacterInfo.BatteryEnergy;
-                                    float o2 = MyHud.CharacterInfo.OxygenLevel * 100;
-                                    float h = MyHud.CharacterInfo.HydrogenRatio * 100;
-                                    long now = DateTime.UtcNow.Ticks;
-                                    
-                                    if(prevBattery != power)
-                                    {
-                                        if(prevBattery > power)
-                                        {
-                                            float elapsed = (float)TimeSpan.FromTicks(now - prevBatteryTime).TotalSeconds;
-                                            etaPower = (0 - power) / ((power - prevBattery) / elapsed);
-                                            
-                                            if(etaPower < 0)
-                                                etaPower = float.PositiveInfinity;
-                                            
-                                            prevBatteryTime = now;
-                                        }
-                                        else
-                                            etaPower = float.PositiveInfinity;
-                                        
-                                        prevBattery = power;
-                                    }
-                                    
-                                    if(prevO2 != o2)
-                                    {
-                                        float elapsed = (float)TimeSpan.FromTicks(now - prevO2Time).TotalSeconds;
-                                        etaO2 = (0 - o2) / ((o2 - prevO2) / elapsed);
-                                        
-                                        if(etaO2 < 0)
-                                            etaO2 = float.PositiveInfinity;
-                                        
-                                        prevO2 = o2;
-                                        prevO2Time = now;
-                                    }
-                                    
-                                    float elapsedH = (float)TimeSpan.FromTicks(now - prevHTime).TotalSeconds;
-                                    
-                                    if(prevH != h || elapsedH > (TimeSpan.TicksPerSecond * 2))
-                                    {
-                                        float diff = h - prevH;
-                                        
-                                        if(diff < 0)
-                                        {
-                                            etaH = (0 - h) / ((h - prevH) / elapsedH);
-                                            
-                                            if(etaH < 0)
-                                                etaH = float.PositiveInfinity;
-                                        }
-                                        else
-                                            etaH = float.PositiveInfinity;
-                                        
-                                        prevH = h;
-                                        prevHTime = now;
-                                    }
-                                    
-                                    if(etaPower < etaO2 && etaPower < etaH)
-                                    {
-                                        str.Append("Battery: ").Append(Math.Round(power, 2)).Append("% (");
-                                        MyValueFormatter.AppendTimeInBestUnit(etaPower, str);
-                                        str.Append(")");
-                                    }
-                                    else if(etaO2 < etaPower && etaO2 < etaH)
-                                    {
-                                        str.Append("Oxygen: ").Append(Math.Round(o2, 2)).Append("% (");
-                                        MyValueFormatter.AppendTimeInBestUnit(etaO2, str);
-                                        str.Append(")");
-                                    }
-                                    else if(etaH < etaPower && etaH < etaO2)
-                                    {
-                                        str.Append("Hydrogen: ").Append(Math.Round(h, 2)).Append("% (");
-                                        MyValueFormatter.AppendTimeInBestUnit(etaH, str);
-                                        str.Append(")");
-                                    }
-                                    else
-                                    {
-                                        str.Append("Calculating...");
-                                    }
-                                }
-                                
-                                str.AppendLine();
-                            }
-                            
-                            str.AppendLine();
-                            
-                            bool cubeBuilder = MyAPIGateway.CubeBuilder.IsActivated;
-                            bool buildTool = false;
-                            bool handDrill = false;
-                            bool handWeapon = false;
-                            
-                            if(!cubeBuilder && !inShip && holdingTool != null)
-                            {
-                                if(holdingTool.Closed || holdingTool.MarkedForClose)
-                                {
-                                    holdingTool = null;
-                                }
-                                else
-                                {
-                                    if(holdingToolTypeId == typeof(MyObjectBuilder_Welder) || holdingToolTypeId == typeof(MyObjectBuilder_AngleGrinder))
-                                        buildTool = true;
-                                    else if(holdingToolTypeId == typeof(MyObjectBuilder_HandDrill))
-                                        handDrill = true;
-                                    else if(holdingToolTypeId == typeof(MyObjectBuilder_AutomaticRifle))
-                                        handWeapon = true;
-                                }
-                            }
-                            
-                            if(cubeBuilder || buildTool)
-                            {
-                                var b = MyHud.BlockInfo;
-                                
-                                if(b.BlockName != null && b.BlockName.Length > 0)
-                                {
-                                    int hp = (int)Math.Floor(b.BlockIntegrity * 100);
-                                    int crit = (int)Math.Floor(b.CriticalIntegrity * 100);
-                                    int own = (int)Math.Floor(b.OwnershipIntegrity * 100);
-                                    
-                                    if(!cubeBuilder && hp == 0 && crit == 0 && own == 0)
-                                    {
-                                        str.Append("Waiting for selection...").AppendLine();
-                                    }
-                                    else
-                                    {
-                                        str.Append(MyHud.BlockInfo.BlockName).AppendLine();
-                                        
-                                        if(!cubeBuilder)
-                                            str.Append("Integrity: ").Append(hp).Append("% (").Append(crit).Append("% / ").Append(own).Append("%)").AppendLine();
-                                        
-                                        components.Clear();
-                                        
-                                        foreach(var comp in b.Components)
-                                        {
-                                            if(comp.TotalCount > comp.InstalledCount)
-                                            {
-                                                if(components.ContainsKey(comp.DefinitionId.SubtypeName))
-                                                    components[comp.DefinitionId.SubtypeName] += (comp.TotalCount - comp.InstalledCount);
-                                                else
-                                                    components.Add(comp.DefinitionId.SubtypeName, (comp.TotalCount - comp.InstalledCount));
-                                            }
-                                        }
-                                        
-                                        int componentsCount = components.Count;
-                                        
-                                        if(componentsCount > 0)
-                                        {
-                                            int max = (cubeBuilder ? 4 : 3);
-                                            int line = 0;
-                                            
-                                            foreach(var comp in components)
-                                            {
-                                                str.Append("  ").Append(comp.Value).Append("x ").Append(comp.Key).AppendLine();
-                                                
-                                                if(++line >= max)
-                                                    break;
-                                            }
-                                            
-                                            if(componentsCount > max)
-                                                str.Append(" +").Append(componentsCount - 3).Append(" other...").AppendLine();
-                                            
-                                            components.Clear();
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    str.Append("Waiting for selection...").AppendLine();
-                                }
-                            }
-                            else if(handDrill)
-                            {
-                                str.Append("Ore in range: ").Append(MyHud.OreMarkers.Count()).AppendLine();
-                            }
-                            else if(handWeapon)
-                            {
-                                var obj = holdingTool.GetObjectBuilder(false) as MyObjectBuilder_AutomaticRifle;
-                                var physDef = MyDefinitionManager.Static.GetPhysicalItemForHandItem(obj.GetId());
-                                var physWepDef = physDef as MyWeaponItemDefinition;
-                                MyWeaponDefinition wepDef;
-                                
-                                if(physWepDef != null && MyDefinitionManager.Static.TryGetWeaponDefinition(physWepDef.WeaponDefinitionId, out wepDef))
-                                {
-                                    str.Append(physDef.DisplayNameText).AppendLine();
-                                    
-                                    MyInventory inv;
-                                    
-                                    if((MyAPIGateway.Session.ControlledObject.Entity as MyEntity).TryGetInventory(out inv))
-                                    {
-                                        var currentMag = obj.GunBase.CurrentAmmoMagazineName;
-                                        var types = wepDef.AmmoMagazinesId.Length;
-                                        
-                                        float rounds = 0;
-                                        tmp.Clear();
-                                        
-                                        for(int i = 0; i < types; i++)
-                                        {
-                                            var magId = wepDef.AmmoMagazinesId[i];
-                                            var magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
-                                            
-                                            if(types > 1)
-                                            {
-                                                if(magId.SubtypeName == currentMag)
-                                                    str.Append("[x] ");
-                                                else
-                                                    str.Append("[ ] ");
-                                            }
-                                            
-                                            float mags = (float)inv.GetItemAmount(wepDef.AmmoMagazinesId[i], MyItemFlags.None);
-                                            string magName = magDef.DisplayNameText;
-                                            
-                                            if(magName.Length > 22)
-                                                magName = magName.Substring(0, 20)+"..";
-                                            
-                                            if(magId.SubtypeName == currentMag)
-                                                rounds = obj.GunBase.RemainingAmmo + mags * magDef.Capacity;
-                                            
-                                            tmp.Append(mags).Append("x ").Append(magName).AppendLine();
-                                        }
-                                        
-                                        str.Append("Rounds: ").Append(rounds).AppendLine();
-                                        str.Append(tmp);
-                                        tmp.Clear();
-                                    }
-                                    else
-                                    {
-                                        str.AppendLine("Error getting character inventory.");
-                                    }
-                                }
-                            }
-                            else if(inShip)
-                            {
-                                var controlled = MyAPIGateway.Session.ControlledObject as Ingame.IMyShipController;
-                                
-                                if(controlled != null)
-                                {
-                                    var toolbarObj = (controlled as IMyCubeBlock).GetObjectBuilderCubeBlock(false) as MyObjectBuilder_ShipController;
-                                    var grid = controlled.CubeGrid as IMyCubeGrid;
-                                    
-                                    if(toolbarObj.Toolbar != null && toolbarObj.Toolbar.SelectedSlot.HasValue)
-                                    {
-                                        var item = toolbarObj.Toolbar.Slots[toolbarObj.Toolbar.SelectedSlot.Value];
-                                        
-                                        if(item.Data is MyObjectBuilder_ToolbarItemWeapon)
-                                        {
-                                            var weapon = item.Data as MyObjectBuilder_ToolbarItemWeapon;
-                                            bool shipWelder = weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_ShipWelder);
-                                            
-                                            if(shipWelder || weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_ShipGrinder))
-                                            {
-                                                blocks.Clear();
-                                                grid.GetBlocks(blocks, b => b.FatBlock != null);
-                                                
-                                                float cargo = 0;
-                                                float cargoMax = 0;
-                                                float cargoMass = 0;
-                                                int tools = 0;
-                                                MyInventory inv;
-                                                
-                                                foreach(var slim in blocks)
-                                                {
-                                                    if(shipWelder ? slim.FatBlock is Ingame.IMyShipWelder : slim.FatBlock is Ingame.IMyShipGrinder)
-                                                    {
-                                                        tools++;
-                                                        
-                                                        if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-                                                        {
-                                                            cargo += (float)inv.CurrentVolume;
-                                                            cargoMax += (float)inv.MaxVolume;
-                                                            cargoMass += (float)inv.CurrentMass;
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                str.Append(tools).Append("x ").Append(shipWelder ? "welders" : "grinders").Append(": ").Append(Math.Round((cargo / cargoMax) * 100, 2)).Append("% (").Append(cargoMass.ToString(NUMBER_FORMAT)).Append(" kg)").AppendLine();
-                                                
-                                                var targetGrid = MyAPIGateway.CubeBuilder.FindClosestGrid();
-                                                
-                                                if(targetGrid != null)
-                                                {
-                                                    var view = MyAPIGateway.Session.ControlledObject.GetHeadMatrix(true, true);
-                                                    var rayFrom = view.Translation + view.Forward * 2;
-                                                    var rayTo = view.Translation + view.Forward * 10;
-                                                    var blockPos = targetGrid.RayCastBlocks(rayFrom, rayTo);
-                                                    
-                                                    if(blockPos.HasValue)
-                                                    {
-                                                        var slimBlock = targetGrid.GetCubeBlock(blockPos.Value);
-                                                        
-                                                        if(slimBlock == null)
-                                                        {
-                                                            Log.Error("Unexpected empty block slot at " + blockPos.Value);
-                                                            return;
-                                                        }
-                                                        
-                                                        var block = slimBlock.FatBlock;
-                                                        MyObjectBuilder_CubeBlock obj = null;
-                                                        MyCubeBlockDefinition def;
-                                                        MyDefinitionId defId;
-                                                        
-                                                        if(block == null)
-                                                        {
-                                                            obj = slimBlock.GetObjectBuilder();
-                                                            defId = obj.GetId();
-                                                        }
-                                                        else
-                                                        {
-                                                            defId = block.BlockDefinition;
-                                                        }
-                                                        
-                                                        if(MyDefinitionManager.Static.TryGetCubeBlockDefinition(defId, out def))
-                                                        {
-                                                            if(block is IMyTerminalBlock)
-                                                                str.Append("\"").Append((block as IMyTerminalBlock).CustomName).Append("\"").AppendLine();
-                                                            else
-                                                                str.Append(def.DisplayNameText).AppendLine();
-                                                            
-                                                            str.Append("Integrity: "+Math.Round((slimBlock.BuildIntegrity / slimBlock.MaxIntegrity) * 100, 2)+"% ("+Math.Round(def.CriticalIntegrityRatio * 100, 0)+"% / "+Math.Round(def.OwnershipIntegrityRatio * 100, 0)+"%)").AppendLine();
-                                                            
-                                                            Dictionary<string, int> missing = new Dictionary<string, int>();
-                                                            slimBlock.GetMissingComponents(missing);
-                                                            int missingCount = missing.Count;
-                                                            
-                                                            if(missingCount > 0)
-                                                            {
-                                                                int max = 3;
-                                                                int line = 0;
-                                                                
-                                                                foreach(var comp in missing)
-                                                                {
-                                                                    str.Append("  ").Append(comp.Value).Append("x ").Append(comp.Key).AppendLine();
-                                                                    
-                                                                    if(++line >= max)
-                                                                        break;
-                                                                }
-                                                                
-                                                                //if(missingCount > max)
-                                                                //	str.Append(" +").Append(missingCount - 3).Append(" other...").AppendLine();
-                                                            }
-                                                            else
-                                                            {
-                                                                str.Append("  No missing components.").AppendLine();
-                                                            }
-                                                        }
-                                                        else
-                                                        {
-                                                            str.Append("ERROR: No definition for block").AppendLine();
-                                                        }
-                                                    }
-                                                    else
-                                                    {
-                                                        str.Append("Aim at a block to inspect it.").AppendLine();
-                                                    }
-                                                }
-                                                else
-                                                {
-                                                    str.Append("Aim at a block to inspect it.").AppendLine();
-                                                }
-                                            }
-                                            else if(weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_SmallGatlingGun))
-                                            {
-                                                blocks.Clear();
-                                                grid.GetBlocks(blocks, b => b.FatBlock != null);
-                                                
-                                                float gatlingAmmo = 0;
-                                                float containerAmmo = 0;
-                                                int gatlingGuns = 0;
-                                                MyInventory inv;
-                                                MyAmmoMagazineDefinition magDef = null;
-                                                
-                                                foreach(var slim in blocks)
-                                                {
-                                                    if(slim.FatBlock is Ingame.IMySmallGatlingGun)
-                                                    {
-                                                        var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallGatlingGun;
-                                                        var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
-                                                        var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
-                                                        var currentMag = obj.GunBase.CurrentAmmoMagazineName;
-                                                        var types = wepDef.AmmoMagazinesId.Length;
-                                                        
-                                                        gatlingGuns++;
-                                                        gatlingAmmo += obj.GunBase.RemainingAmmo;
-                                                        
-                                                        for(int i = 0; i < types; i++)
-                                                        {
-                                                            var magId = wepDef.AmmoMagazinesId[i];
-                                                            
-                                                            if(magId.SubtypeName == currentMag)
-                                                            {
-                                                                magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
-                                                                
-                                                                if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-                                                                    gatlingAmmo += (int)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
-                                                                
-                                                                break;
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                foreach(var slim in blocks)
-                                                {
-                                                    if(slim.FatBlock is Ingame.IMyCargoContainer)
-                                                    {
-                                                        if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-                                                        {
-                                                            containerAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                str.Append(gatlingGuns).Append("x gatling guns: ").Append((int)gatlingAmmo).AppendLine();
-                                                str.Append("Ammo in containers: ").Append((int)containerAmmo).AppendLine();
-                                            }
-                                            else if(weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_SmallMissileLauncher) || weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_SmallMissileLauncherReload))
-                                            {
-                                                bool reloadable = weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_SmallMissileLauncherReload);
-                                                
-                                                blocks.Clear();
-                                                grid.GetBlocks(blocks, b => b.FatBlock != null);
-                                                
-                                                int launchers = 0;
-                                                float launcherAmmo = 0;
-                                                float containerAmmo = 0;
-                                                MyInventory inv;
-                                                MyAmmoMagazineDefinition magDef = null;
-                                                
-                                                foreach(var slim in blocks)
-                                                {
-                                                    if(slim.FatBlock is Ingame.IMySmallMissileLauncher && (reloadable == slim.FatBlock is Ingame.IMySmallMissileLauncherReload))
-                                                    {
-                                                        var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallMissileLauncher;
-                                                        var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
-                                                        var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
-                                                        var currentMag = obj.GunBase.CurrentAmmoMagazineName;
-                                                        var types = wepDef.AmmoMagazinesId.Length;
-                                                        
-                                                        launchers++;
-                                                        launcherAmmo += obj.GunBase.RemainingAmmo;
-                                                        
-                                                        for(int i = 0; i < types; i++)
-                                                        {
-                                                            var magId = wepDef.AmmoMagazinesId[i];
-                                                            
-                                                            if(magId.SubtypeName == currentMag)
-                                                            {
-                                                                magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
-                                                                
-                                                                if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-                                                                    launcherAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
-                                                                
-                                                                break;
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                foreach(var slim in blocks)
-                                                {
-                                                    if(slim.FatBlock is Ingame.IMyCargoContainer)
-                                                    {
-                                                        if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-                                                        {
-                                                            containerAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                str.Append(launchers).Append("x missile launchers: ").Append((int)launcherAmmo).AppendLine();
-                                                str.Append("Ammo in containers: ").Append((int)containerAmmo).AppendLine();
-                                            }
-                                            else if(weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_Drill))
-                                            {
-                                                blocks.Clear();
-                                                grid.GetBlocks(blocks, b => b.FatBlock != null);
-                                                
-                                                float cargo = 0;
-                                                float cargoMax = 0;
-                                                float cargoMass = 0;
-                                                int containers = 0;
-                                                float drillVol = 0;
-                                                float drillVolMax = 0;
-                                                float drillMass = 0;
-                                                int drills = 0;
-                                                MyInventory inv;
-                                                
-                                                foreach(var slim in blocks)
-                                                {
-                                                    if(slim.FatBlock is Ingame.IMyShipDrill)
-                                                    {
-                                                        drills++;
-                                                        
-                                                        if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-                                                        {
-                                                            drillVol += (float)inv.CurrentVolume;
-                                                            drillVolMax += (float)inv.MaxVolume;
-                                                            drillMass += (float)inv.CurrentMass;
-                                                        }
-                                                    }
-                                                    else if(slim.FatBlock is Ingame.IMyCargoContainer)
-                                                    {
-                                                        containers++;
-                                                        
-                                                        if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-                                                        {
-                                                            cargo += (float)inv.CurrentVolume;
-                                                            cargoMax += (float)inv.MaxVolume;
-                                                            cargoMass += (float)inv.CurrentMass;
-                                                        }
-                                                    }
-                                                }
-                                                
-                                                str.Append(drills).Append("x drills: ").Append(Math.Round((drillVol / drillVolMax) * 100, 2)).Append("% (").Append(drillMass.ToString(NUMBER_FORMAT)).Append(" kg)").AppendLine();
-                                                str.Append(containers).Append("x containers: ").Append(Math.Round((cargo / cargoMax) * 100, 2)).Append("% (").Append(cargoMass.ToString(NUMBER_FORMAT)).Append(" kg)").AppendLine();
-                                            }
-                                        }
-                                    }
-                                    else
-                                    {
-                                        var blockName = controlled.CustomName.ToLower();
-                                        
-                                        if(blockName.Contains("ores"))
-                                        {
-                                            str.Append("Ore in range: ").Append(MyHud.OreMarkers.Count()).AppendLine();
-                                        }
-                                        
-                                        bool showGatling = false; //blockName.Contains("gatling");
-                                        bool showLaunchers = false; //blockName.Contains("launchers");
-                                        bool showAmmo = false; //blockName.Contains("ammo");
-                                        bool showCargo = blockName.Contains("cargo");
-                                        bool showOxygen = blockName.Contains("oxygen");
-                                        bool showHydrogen = blockName.Contains("hydrogen");
-                                        
-                                        if(showGatling || showLaunchers || showAmmo || showCargo || showOxygen || showHydrogen)
-                                        {
-                                            blocks.Clear();
-                                            grid.GetBlocks(blocks, b => b.FatBlock != null);
-                                            
-                                            float cargo = 0;
-                                            float totalCargo = 0;
-                                            float cargoMass = 0;
-                                            int containers = 0;
-                                            float mags = 0;
-                                            int bullets = 0;
-                                            float missiles = 0;
-                                            
-                                            float oxygen = 0;
-                                            int oxygenTanks = 0;
-                                            
-                                            float hydrogen = 0;
-                                            int hydrogenTanks = 0;
-                                            
-                                            int gatlingGuns = 0;
-                                            float gatlingAmmo = 0;
-                                            
-                                            int launchers = 0;
-                                            float launchersAmmo = 0;
-                                            
-                                            MyInventory inv;
-                                            
-                                            foreach(var slim in blocks)
-                                            {
-                                                if(showGatling && slim.FatBlock is Ingame.IMySmallGatlingGun)
-                                                {
-                                                    var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallGatlingGun;
-                                                    var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
-                                                    var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
-                                                    var currentMag = obj.GunBase.CurrentAmmoMagazineName;
-                                                    var types = wepDef.AmmoMagazinesId.Length;
-                                                    
-                                                    gatlingGuns++;
-                                                    gatlingAmmo += obj.GunBase.RemainingAmmo;
-                                                    
-                                                    for(int i = 0; i < types; i++)
-                                                    {
-                                                        var magId = wepDef.AmmoMagazinesId[i];
-                                                        
-                                                        if(magId.SubtypeName == currentMag)
-                                                        {
-                                                            var magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
-                                                            
-                                                            if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-                                                                gatlingAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
-                                                            
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                                else if(showLaunchers && slim.FatBlock is Ingame.IMySmallMissileLauncher)
-                                                {
-                                                    var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallMissileLauncher;
-                                                    var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
-                                                    var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
-                                                    var currentMag = obj.GunBase.CurrentAmmoMagazineName;
-                                                    var types = wepDef.AmmoMagazinesId.Length;
-                                                    
-                                                    launchers++;
-                                                    launchersAmmo += obj.GunBase.RemainingAmmo;
-                                                    
-                                                    for(int i = 0; i < types; i++)
-                                                    {
-                                                        var magId = wepDef.AmmoMagazinesId[i];
-                                                        
-                                                        if(magId.SubtypeName == currentMag)
-                                                        {
-                                                            var magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
-                                                            
-                                                            if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-                                                                launchersAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
-                                                            
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                                else if(showCargo && slim.FatBlock is Ingame.IMyCargoContainer)
-                                                {
-                                                    if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-                                                    {
-                                                        cargo += (float)inv.CurrentVolume;
-                                                        totalCargo += (float)inv.MaxVolume;
-                                                        cargoMass += (float)inv.CurrentMass;
-                                                        containers++;
-                                                    }
-                                                }
-                                                else if(showAmmo && (slim.FatBlock is Ingame.IMyLargeTurretBase || slim.FatBlock is Ingame.IMySmallGatlingGun || slim.FatBlock is Ingame.IMyCargoContainer))
-                                                {
-                                                    if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
-                                                    {
-                                                        mags += (float)inv.GetItemAmount(AMMO_BULLETS.GetId(), MyItemFlags.None);
-                                                        missiles += (float)inv.GetItemAmount(AMMO_MISSILES.GetId(), MyItemFlags.None);
-                                                    }
-                                                }
-                                                else if((showOxygen || showHydrogen) && slim.FatBlock is Ingame.IMyOxygenTank)
-                                                {
-                                                    var tank = slim.FatBlock as Ingame.IMyOxygenTank;
-                                                    var def = MyDefinitionManager.Static.GetCubeBlockDefinition(tank.BlockDefinition) as MyGasTankDefinition;
-                                                    
-                                                    if(showHydrogen && def.StoredGasId.SubtypeName == "Hydrogen")
-                                                    {
-                                                        hydrogen += tank.GetOxygenLevel();
-                                                        hydrogenTanks += 1;
-                                                    }
-                                                    else if(showOxygen && def.StoredGasId.SubtypeName == "Oxygen")
-                                                    {
-                                                        oxygen += tank.GetOxygenLevel();
-                                                        oxygenTanks += 1;
-                                                    }
-                                                }
-                                            }
-                                            
-                                            if(showGatling)
-                                            {
-                                                str.Append(gatlingGuns).Append("x Gatling Gun: ").Append(Math.Floor(gatlingAmmo)).AppendLine();
-                                            }
-                                            
-                                            if(showLaunchers)
-                                            {
-                                                str.Append(launchers).Append("x Missile Launcher: ").Append(Math.Floor(launchersAmmo)).AppendLine();
-                                            }
-                                            
-                                            if(showAmmo)
-                                            {
-                                                str.Append(mags).Append("x 25x184 mags (").Append(bullets).Append(")").AppendLine();
-                                                str.Append(missiles).Append("x 200mm missiles").AppendLine();
-                                            }
-                                            
-                                            if(showCargo)
-                                            {
-                                                if(containers == 0)
-                                                    str.Append("No cargo containers");
-                                                else
-                                                    str.Append(containers).Append("x Container: ").Append(Math.Round((cargo / totalCargo) * 100f, 2)).Append("% (").Append(cargoMass.ToString(NUMBER_FORMAT)).Append("kg)");
-                                                str.AppendLine();
-                                            }
-                                            
-                                            if(showOxygen)
-                                            {
-                                                if(oxygenTanks == 0)
-                                                    str.Append("No oxygen tanks.");
-                                                else
-                                                    str.Append(oxygenTanks).Append("x Oxygen tank: ").Append(Math.Round((oxygen / oxygenTanks) * 100f, 2)).Append("%");
-                                                str.AppendLine();
-                                            }
-                                            
-                                            if(showHydrogen)
-                                            {
-                                                if(hydrogenTanks == 0)
-                                                    str.Append("No hydrogen tanks");
-                                                else
-                                                    str.Append(hydrogenTanks).Append("x Hydrogen tank: ").Append(Math.Round((hydrogen / hydrogenTanks) * 100f, 2)).Append("%");
-                                                str.AppendLine();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        catch(Exception e)
-                        {
-                            str.Append("ERROR, SEND LOG TO AUTHOR.").AppendLine();
-                            Log.Error(e);
-                        }
-                        
-                        displayText = str.ToString();
-                        str.Clear();
-                        
-                        if(lastDisplayText == null || !displayText.Equals(lastDisplayText))
-                        {
-                            displayUpdate = true;
-                            lastDisplayText = displayText;
-                            
-                            // updating somewhere else due to a recently appeared issue
-                            //lcd.WritePublicText(text);
-                            //lcd.ShowTextureOnScreen();
-                            //lcd.ShowPublicTextOnScreen();
-                        }
+                        vectorGravity = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HUD_PREFIX + "vectorGravity");
+                    }
+                }
+                else
+                {
+                    if(vectorGravity != null)
+                    {
+                        vectorGravity.SetPosition(matrix.Translation + matrix.Backward * 1000);
+                        vectorGravity.Close();
+                        vectorGravity = null;
                     }
                 }
                 
-                if(!element.hasBar)
-                    return; // if the HUD element has no bar, stop here.
+                if(isMoving)
+                {
+                    if(vectorVelocity == null)
+                    {
+                        vectorVelocity = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HUD_PREFIX + "vectorVelocity");
+                    }
+                }
+                else
+                {
+                    if(vectorVelocity != null)
+                    {
+                        vectorVelocity.SetPosition(matrix.Translation + matrix.Backward * 1000);
+                        vectorVelocity.Close();
+                        vectorVelocity = null;
+                    }
+                }
+                
+                // TODO optimize ?!
+                
+                matrix.Translation += matrix.Forward * 0.05;
+                headPos += matrix.Forward * 0.22;
+                
+                var dirV = Vector3D.Normalize(headPos - (matrix.Translation + matrix.Up * element.posUp));
+                var dirH = Vector3D.Normalize(headPos - (matrix.Translation + matrix.Left * element.posLeft));
+                
+                matrix.Translation += (matrix.Left * element.posLeft) + (matrix.Up * element.posUp);
+                
+                iconEntities[id].SetWorldMatrix(matrix);
+                
+                if(vectorGravity == null && vectorVelocity == null)
+                    return;
+                
+                float angV = (float)Math.Acos(Math.Round(Vector3D.Dot(matrix.Backward, dirV), 4));
+                float angH = (float)Math.Acos(Math.Round(Vector3D.Dot(matrix.Backward, dirH), 4));
+                
+                if(element.posUp > 0)
+                    angV = -angV;
+                
+                if(element.posLeft < 0)
+                    angH = -angH;
+                
+                var offsetV = MatrixD.CreateFromAxisAngle(matrix.Left, angV);
+                var offsetH = MatrixD.CreateFromAxisAngle(matrix.Up, angH);
+                
+                if(vectorGravity != null)
+                {
+                    var matrixGravity = matrix;
+                    
+                    AlignToVector(ref matrixGravity, gravityDir);
+                    
+                    matrixGravity *= offsetV * offsetH;
+                    
+                    var zScale = MathHelper.Clamp(gravityForce, 0, 3);
+                    var xyScale = MathHelper.Clamp(zScale, 0.5, 1.0);
+                    var vectorScale = new Vector3D(xyScale, xyScale, zScale);
+                    MatrixD.Rescale(ref matrixGravity, ref vectorScale);
+                    
+                    matrixGravity.Translation = matrix.Translation;
+                    
+                    vectorGravity.SetWorldMatrix(matrixGravity);
+                }
+                
+                if(vectorVelocity != null)
+                {
+                    var matrixVelocity = matrix;
+                    
+                    var num = 1.0f / velL;
+                    var velN = new Vector3(vel.X * num, vel.Y * num, vel.Z * num);
+                    
+                    AlignToVector(ref matrixVelocity, velN);
+                    
+                    matrixVelocity *= offsetV * offsetH;
+                    
+                    var zScale = MathHelper.Clamp(velL / 50, 0, 3);
+                    var xyScale = MathHelper.Clamp(zScale, 0.5, 1.0);
+                    var vectorScale = new Vector3D(xyScale, xyScale, zScale);
+                    MatrixD.Rescale(ref matrixVelocity, ref vectorScale);
+                    
+                    matrixVelocity.Translation = matrix.Translation;
+                    
+                    vectorVelocity.SetWorldMatrix(matrixVelocity);
+                }
+                
+                return;
+            }
+            
+            // more curvature for the display
+            if(id == Icons.DISPLAY)
+                headPos += matrix.Forward * 0.23;
+            
+            // horizon crosshair is always centered, no reason to apply TransformHUD()
+            if(id == Icons.HORIZON)
+            {
+                matrix.Translation += matrix.Forward * 0.02; // TODO fix the whiteness issue with horizon indicator and remove this afterwards
+            }
+            else
+            {
+                matrix.Translation += (matrix.Left * element.posLeft) + (matrix.Up * element.posUp);
+                
+                // align the element to the view and give it the glass curve
+                TransformHUD(ref matrix, matrix.Translation + matrix.Forward * 0.05, headPos, -matrix.Up, matrix.Forward);
+            }
+            
+            iconEntities[id].SetWorldMatrix(matrix);
+            
+            if(!element.hasBar)
+                return; // if the HUD element has no bar, stop here.
+            
+            if(iconBarEntities[id] == null)
+            {
+                iconBarEntities[id] = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HUD_PREFIX + element.name + "Bar");
                 
                 if(iconBarEntities[id] == null)
-                {
-                    iconBarEntities[id] = SpawnPrefab(settings.GetRenderPrefix() + CUBE_HUD_PREFIX + element.name + "Bar");
-                    
-                    if(iconBarEntities[id] == null)
-                        return;
-                }
-                
-                if(id == Icons.HORIZON)
-                {
-                    var controller = MyAPIGateway.Session.ControlledObject as MyShipController;
-                    
-                    var dotV = Vector3.Dot(naturalDir, controller.WorldMatrix.Forward);
-                    var dotH = Vector3.Dot(naturalDir, controller.WorldMatrix.Right);
-                    
-                    matrix.Translation += matrix.Up * (dotV * 0.035);
-                    
-                    var tmp = matrix.Translation;
-                    matrix *= MatrixD.CreateFromAxisAngle(matrix.Backward, MathHelper.ToRadians(dotH * 90));
-                    matrix.Translation = tmp;
-                    
-                    // horizon bar is not a resizable or blinking bar so just update it here and stop
-                    iconBarEntities[id].SetWorldMatrix(matrix);
                     return;
-                }
-                
-                // blink the bar along with the warning icon
-                if(!warningBlinkOn && percent <= element.warnPercent)
-                {
-                    matrix.Translation += (matrix.Backward * 10);
-                    iconBarEntities[id].SetWorldMatrix(matrix);
-                    return;
-                }
-                
-                // calculate the bar size
-                double scale = Math.Min(Math.Max((percent * HUD_BAR_MAX_SCALE) / 100, 0), HUD_BAR_MAX_SCALE);
-                var align = (element.flipHorizontal ? matrix.Left : matrix.Right);
-                matrix.Translation += (align * (scale / 100.0)) - (align * (0.00955 + (0.0008 * (0.5 - (percent / 100)))));
-                matrix.M11 *= scale;
-                matrix.M12 *= scale;
-                matrix.M13 *= scale;
-                
-                iconBarEntities[id].SetWorldMatrix(matrix);
             }
-            catch(Exception e)
+            
+            if(id == Icons.HORIZON)
             {
-                Log.Error(e);
+                var controller = MyAPIGateway.Session.ControlledObject as MyShipController;
+                
+                var dotV = Vector3.Dot(naturalDir, controller.WorldMatrix.Forward);
+                var dotH = Vector3.Dot(naturalDir, controller.WorldMatrix.Right);
+                
+                matrix.Translation += matrix.Up * (dotV * 0.035);
+                
+                var tmp = matrix.Translation;
+                matrix *= MatrixD.CreateFromAxisAngle(matrix.Backward, MathHelper.ToRadians(dotH * 90));
+                matrix.Translation = tmp;
+                
+                // horizon bar is not a resizable or blinking bar so just update it here and stop
+                iconBarEntities[id].SetWorldMatrix(matrix);
+                return;
             }
+            
+            // blink the bar along with the warning icon
+            if(!warningBlinkOn && percent <= element.warnPercent)
+            {
+                matrix.Translation += (matrix.Backward * 10);
+                iconBarEntities[id].SetWorldMatrix(matrix);
+                return;
+            }
+            
+            // calculate the bar size
+            double scale = Math.Min(Math.Max((percent * HUD_BAR_MAX_SCALE) / 100, 0), HUD_BAR_MAX_SCALE);
+            var align = (element.flipHorizontal ? matrix.Left : matrix.Right);
+            matrix.Translation += (align * (scale / 100.0)) - (align * (0.00955 + (0.0008 * (0.5 - (percent / 100)))));
+            matrix.M11 *= scale;
+            matrix.M12 *= scale;
+            matrix.M13 *= scale;
+            
+            iconBarEntities[id].SetWorldMatrix(matrix);
         }
 
         private void AlignToVector(ref MatrixD matrix, Vector3D direction)
@@ -2142,7 +1296,7 @@ namespace Digi.Helmet
                 Log.Error(e);
             }
         }
-
+        
         public void MessageEntered(string msg, ref bool visible)
         {
             if(!msg.StartsWith("/helmet", StringComparison.InvariantCultureIgnoreCase))
@@ -2319,6 +1473,879 @@ namespace Digi.Helmet
             
             MyAPIGateway.Utilities.ShowMissionScreen("Helmet Mod Commands", "", "You can type these commands in the chat.", HELP_COMMANDS, null, "Close");
         }
+        
+        public string GetDisplayData(IMyEntity entity)
+        {
+            if(entity == null || characterEntity == null)
+                return null;
+            
+            if(++skipDisplay % (60 / settings.displayUpdateRate) != 0)
+                return null;
+            
+            skipDisplay = 0;
+            var panel = entity as IMyTextPanel;
+            var panelGrid = panel.CubeGrid as MyCubeGrid;
+            var panelSlim = panelGrid.GetCubeBlock(panel.Position) as IMySlimBlock;
+            
+            if(tick % Helmet.SKIP_TICKS_HUD == 0)
+            {
+                if(settings.displayBorderColor.HasValue)
+                {
+                    if(Vector3.DistanceSquared(panelSlim.GetColorMask(), settings.displayBorderColor.Value) > 0.01f)
+                    {
+                        panelGrid.ChangeColor(panelSlim as Sandbox.Game.Entities.Cube.MySlimBlock, settings.displayBorderColor.Value);
+                        lastDisplayText = null; // force rewrite
+                    }
+                }
+                else
+                {
+                    var charColor = characterEntity.Render.ColorMaskHsv;
+                    
+                    if(Vector3.DistanceSquared(panelSlim.GetColorMask(), charColor) > 0.01f)
+                    {
+                        panelGrid.ChangeColor(panelSlim as Sandbox.Game.Entities.Cube.MySlimBlock, charColor);
+                        lastDisplayText = null; // force rewrite
+                    }
+                }
+            }
+            
+            str.Clear();
+            
+            if(MyHud.CharacterInfo.HealthRatio <= 0)
+            {
+                str.Append(DISPLAY_PAD).Append("ERROR #404:").AppendLine();
+                str.Append(DISPLAY_PAD).Append("USER LIFESIGNS NOT FOUND.").AppendLine();
+            }
+            else try
+            {
+                bool inShip = MyHud.ShipInfo.Visible;
+                float speed = 0;
+                float accel = 0;
+                char accelSymbol = '-';
+                int battery = (int)MyHud.CharacterInfo.BatteryEnergy;
+                
+                if(inShip)
+                {
+                    var block = MyAPIGateway.Session.ControlledObject.Entity as IMyCubeBlock;
+                    
+                    if(block != null && block.CubeGrid != null && block.CubeGrid.Physics != null)
+                    {
+                        speed = (float)Math.Round(block.CubeGrid.Physics.LinearVelocity.Length(), 2);
+                        
+                        if(speed > 0)
+                            accel = (float)Math.Round(block.CubeGrid.Physics.LinearAcceleration.Length(), 2);
+                        else
+                            accel = 0;
+                    }
+                }
+                else
+                {
+                    var player = MyAPIGateway.Session.ControlledObject.Entity;
+                    
+                    if(player != null && player.Physics != null)
+                    {
+                        speed = (float)Math.Round(player.Physics.LinearVelocity.Length(), 2);
+                        
+                        if(speed > 0)
+                            accel = (float)Math.Round(player.Physics.LinearAcceleration.Length(), 2);
+                        else
+                            accel = 0;
+                    }
+                }
+                
+                if(speed >= prevSpeed)
+                    accelSymbol = '+';
+                
+                prevSpeed = speed;
+                string unit = "m/s";
+                
+                if(settings.displaySpeedUnit == SpeedUnits.kph)
+                {
+                    speed *= 3.6f;
+                    unit = "km/h";
+                }
+                
+                str.Append(DISPLAY_PAD).Append("Speed: ").Append(speed.ToString(FLOAT_FORMAT)).Append(unit).Append(" (").Append(accelSymbol).Append(accel.ToString(FLOAT_FORMAT)).Append(unit).Append(")").AppendLine();
+                
+                str.Append(DISPLAY_PAD).Append("Altitude: ");
+                
+                if(naturalForce > 0)
+                    str.Append(altitude.ToString(FLOAT_FORMAT)).Append("m");
+                else
+                    str.Append("N/A");
+                
+                str.AppendLine();
+                
+                str.Append(DISPLAY_PAD).Append("Gravity: ");
+                if(gravityForce > 0)
+                    str.Append(Math.Round(naturalForce, 2)).Append("g natural, ").Append(Math.Round(artificialForce, 2)).Append("g artif.");
+                else
+                    str.Append("None");
+                str.AppendLine();
+                
+                if(inShip)
+                {
+                    var s = MyHud.ShipInfo;
+                    str.Append(DISPLAY_PAD).Append("Ship mass: ");
+                    
+                    if(s.Mass > 1000000)
+                        str.Append((s.Mass / 100000f).ToString(FLOAT_FORMAT)).Append(" tonnes");
+                    else
+                        str.Append(s.Mass.ToString(FLOAT_FORMAT)).Append(" kg");
+                    
+                    str.AppendLine();
+                    
+                    str.Append(DISPLAY_PAD).Append("Power: ");
+                    
+                    if(s.ResourceState == MyResourceStateEnum.NoPower)
+                    {
+                        str.Append("No power");
+                    }
+                    else
+                    {
+                        if(s.ResourceState == MyResourceStateEnum.OverloadBlackout)
+                            str.Append("Overload");
+                        else
+                            str.Append(Math.Floor(s.PowerUsage * 100)).Append("%");
+                        
+                        str.Append(" (");
+                        MyValueFormatter.AppendTimeInBestUnit(s.FuelRemainingTime * 3600f, str);
+                        str.Append(")");
+                    }
+                    
+                    str.AppendLine();
+                    str.Append(DISPLAY_PAD).Append("Landing gears: ").Append(s.LandingGearsInProximity).Append(" / ").Append(s.LandingGearsLocked).Append(" / ").Append(s.LandingGearsTotal).AppendLine();
+                }
+                else
+                {
+                    str.Append(DISPLAY_PAD).Append("Inventory: ").Append(Math.Round((float)MyHud.CharacterInfo.InventoryVolume * 1000, 2).ToString(FLOAT_FORMAT)).Append(" L (").Append(Math.Round(inventoryMass, 2).ToString(FLOAT_FORMAT)).Append(" kg)").AppendLine();
+                    
+                    float mass = MyHud.CharacterInfo.Mass;
+                    
+                    if(characterEntity != null && characterEntity.Physics != null)
+                        mass = characterEntity.Physics.Mass + inventoryMass;
+                    
+                    str.Append(DISPLAY_PAD).Append("Mass: ").Append(mass.ToString(FLOAT_FORMAT)).Append(" kg").AppendLine();
+                    
+                    str.Append(DISPLAY_PAD);
+                    
+                    if(MyAPIGateway.Session.CreativeMode)
+                    {
+                        str.Append("No resource is being drained.");
+                    }
+                    else
+                    {
+                        float power = MyHud.CharacterInfo.BatteryEnergy;
+                        float o2 = MyHud.CharacterInfo.OxygenLevel * 100;
+                        float h = MyHud.CharacterInfo.HydrogenRatio * 100;
+                        long now = DateTime.UtcNow.Ticks;
+                        
+                        if(prevBattery != power)
+                        {
+                            if(prevBattery > power)
+                            {
+                                float elapsed = (float)TimeSpan.FromTicks(now - prevBatteryTime).TotalSeconds;
+                                etaPower = (0 - power) / ((power - prevBattery) / elapsed);
+                                
+                                if(etaPower < 0)
+                                    etaPower = float.PositiveInfinity;
+                                
+                                prevBatteryTime = now;
+                            }
+                            else
+                                etaPower = float.PositiveInfinity;
+                            
+                            prevBattery = power;
+                        }
+                        
+                        if(prevO2 != o2)
+                        {
+                            float elapsed = (float)TimeSpan.FromTicks(now - prevO2Time).TotalSeconds;
+                            etaO2 = (0 - o2) / ((o2 - prevO2) / elapsed);
+                            
+                            if(etaO2 < 0)
+                                etaO2 = float.PositiveInfinity;
+                            
+                            prevO2 = o2;
+                            prevO2Time = now;
+                        }
+                        
+                        float elapsedH = (float)TimeSpan.FromTicks(now - prevHTime).TotalSeconds;
+                        
+                        if(prevH != h || elapsedH > (TimeSpan.TicksPerSecond * 2))
+                        {
+                            float diff = h - prevH;
+                            
+                            if(diff < 0)
+                            {
+                                etaH = (0 - h) / ((h - prevH) / elapsedH);
+                                
+                                if(etaH < 0)
+                                    etaH = float.PositiveInfinity;
+                            }
+                            else
+                                etaH = float.PositiveInfinity;
+                            
+                            prevH = h;
+                            prevHTime = now;
+                        }
+                        
+                        if(etaPower < etaO2 && etaPower < etaH)
+                        {
+                            str.Append("Battery: ").Append(Math.Round(power, 2)).Append("% (");
+                            MyValueFormatter.AppendTimeInBestUnit(etaPower, str);
+                            str.Append(")");
+                        }
+                        else if(etaO2 < etaPower && etaO2 < etaH)
+                        {
+                            str.Append("Oxygen: ").Append(Math.Round(o2, 2)).Append("% (");
+                            MyValueFormatter.AppendTimeInBestUnit(etaO2, str);
+                            str.Append(")");
+                        }
+                        else if(etaH < etaPower && etaH < etaO2)
+                        {
+                            str.Append("Hydrogen: ").Append(Math.Round(h, 2)).Append("% (");
+                            MyValueFormatter.AppendTimeInBestUnit(etaH, str);
+                            str.Append(")");
+                        }
+                        else
+                        {
+                            str.Append("Calculating...");
+                        }
+                    }
+                    
+                    str.AppendLine();
+                }
+                
+                str.AppendLine();
+                
+                bool cubeBuilder = MyAPIGateway.CubeBuilder.IsActivated;
+                bool buildTool = false;
+                bool handDrill = false;
+                bool handWeapon = false;
+                
+                if(!cubeBuilder && !inShip && holdingTool != null)
+                {
+                    if(holdingTool.Closed || holdingTool.MarkedForClose)
+                    {
+                        holdingTool = null;
+                    }
+                    else
+                    {
+                        if(holdingToolTypeId == typeof(MyObjectBuilder_Welder) || holdingToolTypeId == typeof(MyObjectBuilder_AngleGrinder))
+                            buildTool = true;
+                        else if(holdingToolTypeId == typeof(MyObjectBuilder_HandDrill))
+                            handDrill = true;
+                        else if(holdingToolTypeId == typeof(MyObjectBuilder_AutomaticRifle))
+                            handWeapon = true;
+                    }
+                }
+                
+                if(cubeBuilder || buildTool)
+                {
+                    var b = MyHud.BlockInfo;
+                    
+                    if(b.BlockName != null && b.BlockName.Length > 0)
+                    {
+                        int hp = (int)Math.Floor(b.BlockIntegrity * 100);
+                        int crit = (int)Math.Floor(b.CriticalIntegrity * 100);
+                        int own = (int)Math.Floor(b.OwnershipIntegrity * 100);
+                        
+                        if(!cubeBuilder && hp == 0 && crit == 0 && own == 0)
+                        {
+                            str.Append("Waiting for selection...").AppendLine();
+                        }
+                        else
+                        {
+                            str.Append(MyHud.BlockInfo.BlockName).AppendLine();
+                            
+                            if(!cubeBuilder)
+                                str.Append("Integrity: ").Append(hp).Append("% (").Append(crit).Append("% / ").Append(own).Append("%)").AppendLine();
+                            
+                            components.Clear();
+                            
+                            foreach(var comp in b.Components)
+                            {
+                                if(comp.TotalCount > comp.InstalledCount)
+                                {
+                                    if(components.ContainsKey(comp.DefinitionId.SubtypeName))
+                                        components[comp.DefinitionId.SubtypeName] += (comp.TotalCount - comp.InstalledCount);
+                                    else
+                                        components.Add(comp.DefinitionId.SubtypeName, (comp.TotalCount - comp.InstalledCount));
+                                }
+                            }
+                            
+                            int componentsCount = components.Count;
+                            
+                            if(componentsCount > 0)
+                            {
+                                int max = (cubeBuilder ? 4 : 3);
+                                int line = 0;
+                                
+                                foreach(var comp in components)
+                                {
+                                    str.Append("  ").Append(comp.Value).Append("x ").Append(comp.Key).AppendLine();
+                                    
+                                    if(++line >= max)
+                                        break;
+                                }
+                                
+                                if(componentsCount > max)
+                                    str.Append(" +").Append(componentsCount - 3).Append(" other...").AppendLine();
+                                
+                                components.Clear();
+                            }
+                        }
+                    }
+                    else
+                    {
+                        str.Append("Waiting for selection...").AppendLine();
+                    }
+                }
+                else if(handDrill)
+                {
+                    str.Append("Ore in range: ").Append(MyHud.OreMarkers.Count()).AppendLine();
+                }
+                else if(handWeapon)
+                {
+                    var obj = holdingTool.GetObjectBuilder(false) as MyObjectBuilder_AutomaticRifle;
+                    var physDef = MyDefinitionManager.Static.GetPhysicalItemForHandItem(obj.GetId());
+                    var physWepDef = physDef as MyWeaponItemDefinition;
+                    MyWeaponDefinition wepDef;
+                    
+                    if(physWepDef != null && MyDefinitionManager.Static.TryGetWeaponDefinition(physWepDef.WeaponDefinitionId, out wepDef))
+                    {
+                        str.Append(physDef.DisplayNameText).AppendLine();
+                        
+                        MyInventory inv;
+                        
+                        if((MyAPIGateway.Session.ControlledObject.Entity as MyEntity).TryGetInventory(out inv))
+                        {
+                            var currentMag = obj.GunBase.CurrentAmmoMagazineName;
+                            var types = wepDef.AmmoMagazinesId.Length;
+                            
+                            float rounds = 0;
+                            tmp.Clear();
+                            
+                            for(int i = 0; i < types; i++)
+                            {
+                                var magId = wepDef.AmmoMagazinesId[i];
+                                var magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
+                                
+                                if(types > 1)
+                                {
+                                    if(magId.SubtypeName == currentMag)
+                                        str.Append("[x] ");
+                                    else
+                                        str.Append("[ ] ");
+                                }
+                                
+                                float mags = (float)inv.GetItemAmount(wepDef.AmmoMagazinesId[i], MyItemFlags.None);
+                                string magName = magDef.DisplayNameText;
+                                
+                                if(magName.Length > 22)
+                                    magName = magName.Substring(0, 20)+"..";
+                                
+                                if(magId.SubtypeName == currentMag)
+                                    rounds = obj.GunBase.RemainingAmmo + mags * magDef.Capacity;
+                                
+                                tmp.Append(mags).Append("x ").Append(magName).AppendLine();
+                            }
+                            
+                            str.Append("Rounds: ").Append(rounds).AppendLine();
+                            str.Append(tmp);
+                            tmp.Clear();
+                        }
+                        else
+                        {
+                            str.AppendLine("Error getting character inventory.");
+                        }
+                    }
+                }
+                else if(inShip)
+                {
+                    var controlled = MyAPIGateway.Session.ControlledObject as Ingame.IMyShipController;
+                    
+                    if(controlled != null)
+                    {
+                        var toolbarObj = (controlled as IMyCubeBlock).GetObjectBuilderCubeBlock(false) as MyObjectBuilder_ShipController;
+                        var grid = controlled.CubeGrid as IMyCubeGrid;
+                        
+                        if(toolbarObj.Toolbar != null && toolbarObj.Toolbar.SelectedSlot.HasValue)
+                        {
+                            var item = toolbarObj.Toolbar.Slots[toolbarObj.Toolbar.SelectedSlot.Value];
+                            
+                            if(item.Data is MyObjectBuilder_ToolbarItemWeapon)
+                            {
+                                var weapon = item.Data as MyObjectBuilder_ToolbarItemWeapon;
+                                bool shipWelder = weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_ShipWelder);
+                                
+                                if(shipWelder || weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_ShipGrinder))
+                                {
+                                    blocks.Clear();
+                                    grid.GetBlocks(blocks, b => b.FatBlock != null);
+                                    
+                                    float cargo = 0;
+                                    float cargoMax = 0;
+                                    float cargoMass = 0;
+                                    int tools = 0;
+                                    MyInventory inv;
+                                    
+                                    foreach(var slim in blocks)
+                                    {
+                                        if(shipWelder ? slim.FatBlock is Ingame.IMyShipWelder : slim.FatBlock is Ingame.IMyShipGrinder)
+                                        {
+                                            tools++;
+                                            
+                                            if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+                                            {
+                                                cargo += (float)inv.CurrentVolume;
+                                                cargoMax += (float)inv.MaxVolume;
+                                                cargoMass += (float)inv.CurrentMass;
+                                            }
+                                        }
+                                    }
+                                    
+                                    str.Append(tools).Append("x ").Append(shipWelder ? "welders" : "grinders").Append(": ").Append(Math.Round((cargo / cargoMax) * 100, 2)).Append("% (").Append(cargoMass.ToString(NUMBER_FORMAT)).Append(" kg)").AppendLine();
+                                    
+                                    var targetGrid = MyAPIGateway.CubeBuilder.FindClosestGrid();
+                                    
+                                    if(targetGrid != null)
+                                    {
+                                        var view = MyAPIGateway.Session.ControlledObject.GetHeadMatrix(true, true);
+                                        var rayFrom = view.Translation + view.Forward * 2;
+                                        var rayTo = view.Translation + view.Forward * 10;
+                                        var blockPos = targetGrid.RayCastBlocks(rayFrom, rayTo);
+                                        
+                                        if(blockPos.HasValue)
+                                        {
+                                            var slimBlock = targetGrid.GetCubeBlock(blockPos.Value);
+                                            
+                                            if(slimBlock == null)
+                                            {
+                                                Log.Error("Unexpected empty block slot at " + blockPos.Value);
+                                                return null;
+                                            }
+                                            
+                                            var block = slimBlock.FatBlock;
+                                            MyObjectBuilder_CubeBlock obj = null;
+                                            MyCubeBlockDefinition def;
+                                            MyDefinitionId defId;
+                                            
+                                            if(block == null)
+                                            {
+                                                obj = slimBlock.GetObjectBuilder();
+                                                defId = obj.GetId();
+                                            }
+                                            else
+                                            {
+                                                defId = block.BlockDefinition;
+                                            }
+                                            
+                                            if(MyDefinitionManager.Static.TryGetCubeBlockDefinition(defId, out def))
+                                            {
+                                                if(block is IMyTerminalBlock)
+                                                    str.Append("\"").Append((block as IMyTerminalBlock).CustomName).Append("\"").AppendLine();
+                                                else
+                                                    str.Append(def.DisplayNameText).AppendLine();
+                                                
+                                                str.Append("Integrity: "+Math.Round((slimBlock.BuildIntegrity / slimBlock.MaxIntegrity) * 100, 2)+"% ("+Math.Round(def.CriticalIntegrityRatio * 100, 0)+"% / "+Math.Round(def.OwnershipIntegrityRatio * 100, 0)+"%)").AppendLine();
+                                                
+                                                Dictionary<string, int> missing = new Dictionary<string, int>();
+                                                slimBlock.GetMissingComponents(missing);
+                                                int missingCount = missing.Count;
+                                                
+                                                if(missingCount > 0)
+                                                {
+                                                    int max = 3;
+                                                    int line = 0;
+                                                    
+                                                    foreach(var comp in missing)
+                                                    {
+                                                        str.Append("  ").Append(comp.Value).Append("x ").Append(comp.Key).AppendLine();
+                                                        
+                                                        if(++line >= max)
+                                                            break;
+                                                    }
+                                                    
+                                                    //if(missingCount > max)
+                                                    //	str.Append(" +").Append(missingCount - 3).Append(" other...").AppendLine();
+                                                }
+                                                else
+                                                {
+                                                    str.Append("  No missing components.").AppendLine();
+                                                }
+                                            }
+                                            else
+                                            {
+                                                str.Append("ERROR: No definition for block").AppendLine();
+                                            }
+                                        }
+                                        else
+                                        {
+                                            str.Append("Aim at a block to inspect it.").AppendLine();
+                                        }
+                                    }
+                                    else
+                                    {
+                                        str.Append("Aim at a block to inspect it.").AppendLine();
+                                    }
+                                }
+                                else if(weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_SmallGatlingGun))
+                                {
+                                    blocks.Clear();
+                                    grid.GetBlocks(blocks, b => b.FatBlock != null);
+                                    
+                                    float gatlingAmmo = 0;
+                                    float containerAmmo = 0;
+                                    int gatlingGuns = 0;
+                                    MyInventory inv;
+                                    MyAmmoMagazineDefinition magDef = null;
+                                    
+                                    foreach(var slim in blocks)
+                                    {
+                                        if(slim.FatBlock is Ingame.IMySmallGatlingGun)
+                                        {
+                                            var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallGatlingGun;
+                                            var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
+                                            var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
+                                            var currentMag = obj.GunBase.CurrentAmmoMagazineName;
+                                            var types = wepDef.AmmoMagazinesId.Length;
+                                            
+                                            gatlingGuns++;
+                                            gatlingAmmo += obj.GunBase.RemainingAmmo;
+                                            
+                                            for(int i = 0; i < types; i++)
+                                            {
+                                                var magId = wepDef.AmmoMagazinesId[i];
+                                                
+                                                if(magId.SubtypeName == currentMag)
+                                                {
+                                                    magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
+                                                    
+                                                    if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+                                                        gatlingAmmo += (int)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+                                                    
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    foreach(var slim in blocks)
+                                    {
+                                        if(slim.FatBlock is Ingame.IMyCargoContainer)
+                                        {
+                                            if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+                                            {
+                                                containerAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+                                            }
+                                        }
+                                    }
+                                    
+                                    str.Append(gatlingGuns).Append("x gatling guns: ").Append((int)gatlingAmmo).AppendLine();
+                                    str.Append("Ammo in containers: ").Append((int)containerAmmo).AppendLine();
+                                }
+                                else if(weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_SmallMissileLauncher) || weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_SmallMissileLauncherReload))
+                                {
+                                    bool reloadable = weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_SmallMissileLauncherReload);
+                                    
+                                    blocks.Clear();
+                                    grid.GetBlocks(blocks, b => b.FatBlock != null);
+                                    
+                                    int launchers = 0;
+                                    float launcherAmmo = 0;
+                                    float containerAmmo = 0;
+                                    MyInventory inv;
+                                    MyAmmoMagazineDefinition magDef = null;
+                                    
+                                    foreach(var slim in blocks)
+                                    {
+                                        if(slim.FatBlock is Ingame.IMySmallMissileLauncher && (reloadable == slim.FatBlock is Ingame.IMySmallMissileLauncherReload))
+                                        {
+                                            var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallMissileLauncher;
+                                            var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
+                                            var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
+                                            var currentMag = obj.GunBase.CurrentAmmoMagazineName;
+                                            var types = wepDef.AmmoMagazinesId.Length;
+                                            
+                                            launchers++;
+                                            launcherAmmo += obj.GunBase.RemainingAmmo;
+                                            
+                                            for(int i = 0; i < types; i++)
+                                            {
+                                                var magId = wepDef.AmmoMagazinesId[i];
+                                                
+                                                if(magId.SubtypeName == currentMag)
+                                                {
+                                                    magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
+                                                    
+                                                    if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+                                                        launcherAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+                                                    
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    foreach(var slim in blocks)
+                                    {
+                                        if(slim.FatBlock is Ingame.IMyCargoContainer)
+                                        {
+                                            if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+                                            {
+                                                containerAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+                                            }
+                                        }
+                                    }
+                                    
+                                    str.Append(launchers).Append("x missile launchers: ").Append((int)launcherAmmo).AppendLine();
+                                    str.Append("Ammo in containers: ").Append((int)containerAmmo).AppendLine();
+                                }
+                                else if(weapon.DefinitionId.TypeId == typeof(MyObjectBuilder_Drill))
+                                {
+                                    blocks.Clear();
+                                    grid.GetBlocks(blocks, b => b.FatBlock != null);
+                                    
+                                    float cargo = 0;
+                                    float cargoMax = 0;
+                                    float cargoMass = 0;
+                                    int containers = 0;
+                                    float drillVol = 0;
+                                    float drillVolMax = 0;
+                                    float drillMass = 0;
+                                    int drills = 0;
+                                    MyInventory inv;
+                                    
+                                    foreach(var slim in blocks)
+                                    {
+                                        if(slim.FatBlock is Ingame.IMyShipDrill)
+                                        {
+                                            drills++;
+                                            
+                                            if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+                                            {
+                                                drillVol += (float)inv.CurrentVolume;
+                                                drillVolMax += (float)inv.MaxVolume;
+                                                drillMass += (float)inv.CurrentMass;
+                                            }
+                                        }
+                                        else if(slim.FatBlock is Ingame.IMyCargoContainer)
+                                        {
+                                            containers++;
+                                            
+                                            if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+                                            {
+                                                cargo += (float)inv.CurrentVolume;
+                                                cargoMax += (float)inv.MaxVolume;
+                                                cargoMass += (float)inv.CurrentMass;
+                                            }
+                                        }
+                                    }
+                                    
+                                    str.Append(drills).Append("x drills: ").Append(Math.Round((drillVol / drillVolMax) * 100, 2)).Append("% (").Append(drillMass.ToString(NUMBER_FORMAT)).Append(" kg)").AppendLine();
+                                    str.Append(containers).Append("x containers: ").Append(Math.Round((cargo / cargoMax) * 100, 2)).Append("% (").Append(cargoMass.ToString(NUMBER_FORMAT)).Append(" kg)").AppendLine();
+                                }
+                            }
+                        }
+                        else
+                        {
+                            var blockName = controlled.CustomName.ToLower();
+                            
+                            if(blockName.Contains("ores"))
+                            {
+                                str.Append("Ore in range: ").Append(MyHud.OreMarkers.Count()).AppendLine();
+                            }
+                            
+                            bool showGatling = false; //blockName.Contains("gatling");
+                            bool showLaunchers = false; //blockName.Contains("launchers");
+                            bool showAmmo = false; //blockName.Contains("ammo");
+                            bool showCargo = blockName.Contains("cargo");
+                            bool showOxygen = blockName.Contains("oxygen");
+                            bool showHydrogen = blockName.Contains("hydrogen");
+                            
+                            if(showGatling || showLaunchers || showAmmo || showCargo || showOxygen || showHydrogen)
+                            {
+                                blocks.Clear();
+                                grid.GetBlocks(blocks, b => b.FatBlock != null);
+                                
+                                float cargo = 0;
+                                float totalCargo = 0;
+                                float cargoMass = 0;
+                                int containers = 0;
+                                float mags = 0;
+                                int bullets = 0;
+                                float missiles = 0;
+                                
+                                float oxygen = 0;
+                                int oxygenTanks = 0;
+                                
+                                float hydrogen = 0;
+                                int hydrogenTanks = 0;
+                                
+                                int gatlingGuns = 0;
+                                float gatlingAmmo = 0;
+                                
+                                int launchers = 0;
+                                float launchersAmmo = 0;
+                                
+                                MyInventory inv;
+                                
+                                foreach(var slim in blocks)
+                                {
+                                    if(showGatling && slim.FatBlock is Ingame.IMySmallGatlingGun)
+                                    {
+                                        var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallGatlingGun;
+                                        var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
+                                        var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
+                                        var currentMag = obj.GunBase.CurrentAmmoMagazineName;
+                                        var types = wepDef.AmmoMagazinesId.Length;
+                                        
+                                        gatlingGuns++;
+                                        gatlingAmmo += obj.GunBase.RemainingAmmo;
+                                        
+                                        for(int i = 0; i < types; i++)
+                                        {
+                                            var magId = wepDef.AmmoMagazinesId[i];
+                                            
+                                            if(magId.SubtypeName == currentMag)
+                                            {
+                                                var magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
+                                                
+                                                if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+                                                    gatlingAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+                                                
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    else if(showLaunchers && slim.FatBlock is Ingame.IMySmallMissileLauncher)
+                                    {
+                                        var obj = slim.FatBlock.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallMissileLauncher;
+                                        var def = MyDefinitionManager.Static.GetCubeBlockDefinition(slim.FatBlock.BlockDefinition) as MyWeaponBlockDefinition;
+                                        var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
+                                        var currentMag = obj.GunBase.CurrentAmmoMagazineName;
+                                        var types = wepDef.AmmoMagazinesId.Length;
+                                        
+                                        launchers++;
+                                        launchersAmmo += obj.GunBase.RemainingAmmo;
+                                        
+                                        for(int i = 0; i < types; i++)
+                                        {
+                                            var magId = wepDef.AmmoMagazinesId[i];
+                                            
+                                            if(magId.SubtypeName == currentMag)
+                                            {
+                                                var magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
+                                                
+                                                if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+                                                    launchersAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+                                                
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    else if(showCargo && slim.FatBlock is Ingame.IMyCargoContainer)
+                                    {
+                                        if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+                                        {
+                                            cargo += (float)inv.CurrentVolume;
+                                            totalCargo += (float)inv.MaxVolume;
+                                            cargoMass += (float)inv.CurrentMass;
+                                            containers++;
+                                        }
+                                    }
+                                    else if(showAmmo && (slim.FatBlock is Ingame.IMyLargeTurretBase || slim.FatBlock is Ingame.IMySmallGatlingGun || slim.FatBlock is Ingame.IMyCargoContainer))
+                                    {
+                                        if((slim.FatBlock as MyEntity).TryGetInventory(out inv))
+                                        {
+                                            mags += (float)inv.GetItemAmount(AMMO_BULLETS.GetId(), MyItemFlags.None);
+                                            missiles += (float)inv.GetItemAmount(AMMO_MISSILES.GetId(), MyItemFlags.None);
+                                        }
+                                    }
+                                    else if((showOxygen || showHydrogen) && slim.FatBlock is Ingame.IMyOxygenTank)
+                                    {
+                                        var tank = slim.FatBlock as Ingame.IMyOxygenTank;
+                                        var def = MyDefinitionManager.Static.GetCubeBlockDefinition(tank.BlockDefinition) as MyGasTankDefinition;
+                                        
+                                        if(showHydrogen && def.StoredGasId.SubtypeName == "Hydrogen")
+                                        {
+                                            hydrogen += tank.GetOxygenLevel();
+                                            hydrogenTanks += 1;
+                                        }
+                                        else if(showOxygen && def.StoredGasId.SubtypeName == "Oxygen")
+                                        {
+                                            oxygen += tank.GetOxygenLevel();
+                                            oxygenTanks += 1;
+                                        }
+                                    }
+                                }
+                                
+                                if(showGatling)
+                                {
+                                    str.Append(gatlingGuns).Append("x Gatling Gun: ").Append(Math.Floor(gatlingAmmo)).AppendLine();
+                                }
+                                
+                                if(showLaunchers)
+                                {
+                                    str.Append(launchers).Append("x Missile Launcher: ").Append(Math.Floor(launchersAmmo)).AppendLine();
+                                }
+                                
+                                if(showAmmo)
+                                {
+                                    str.Append(mags).Append("x 25x184 mags (").Append(bullets).Append(")").AppendLine();
+                                    str.Append(missiles).Append("x 200mm missiles").AppendLine();
+                                }
+                                
+                                if(showCargo)
+                                {
+                                    if(containers == 0)
+                                        str.Append("No cargo containers");
+                                    else
+                                        str.Append(containers).Append("x Container: ").Append(Math.Round((cargo / totalCargo) * 100f, 2)).Append("% (").Append(cargoMass.ToString(NUMBER_FORMAT)).Append("kg)");
+                                    str.AppendLine();
+                                }
+                                
+                                if(showOxygen)
+                                {
+                                    if(oxygenTanks == 0)
+                                        str.Append("No oxygen tanks.");
+                                    else
+                                        str.Append(oxygenTanks).Append("x Oxygen tank: ").Append(Math.Round((oxygen / oxygenTanks) * 100f, 2)).Append("%");
+                                    str.AppendLine();
+                                }
+                                
+                                if(showHydrogen)
+                                {
+                                    if(hydrogenTanks == 0)
+                                        str.Append("No hydrogen tanks");
+                                    else
+                                        str.Append(hydrogenTanks).Append("x Hydrogen tank: ").Append(Math.Round((hydrogen / hydrogenTanks) * 100f, 2)).Append("%");
+                                    str.AppendLine();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch(Exception e)
+            {
+                str.Append("ERROR, SEND LOG TO AUTHOR.").AppendLine();
+                Log.Error(e);
+            }
+            
+            var text = str.ToString();
+            str.Clear();
+            
+            if(lastDisplayText == null || text != lastDisplayText)
+            {
+                lastDisplayText = text;
+                return text;
+            }
+            
+            return null;
+        }
     }
     
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TextPanel), "HelmetHUD_display", "HelmetHUD_displayLow")] // LCD blinking workaround
@@ -2331,13 +2358,21 @@ namespace Digi.Helmet
         
         public override void UpdateAfterSimulation()
         {
-            if(Helmet.displayUpdate)
+            try
             {
-                Helmet.displayUpdate = false;
-                var panel = Entity as IMyTextPanel;
-                panel.ShowTextureOnScreen();
-                panel.WritePublicText(Helmet.displayText, false);
-                panel.ShowPublicTextOnScreen();
+                var text = Helmet.instance.GetDisplayData(Entity);
+                
+                if(text != null)
+                {
+                    var panel = Entity as IMyTextPanel;
+                    panel.ShowTextureOnScreen();
+                    panel.WritePublicText(text, false);
+                    panel.ShowPublicTextOnScreen();
+                }
+            }
+            catch(Exception e)
+            {
+                Log.Error(e);
             }
         }
         
@@ -2349,10 +2384,10 @@ namespace Digi.Helmet
     
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGenerator))]
     public class GravityGeneratorFlat : GravityGeneratorLogic { }
-
+    
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGeneratorSphere))]
     public class GravityGeneratorSphere : GravityGeneratorLogic { }
-
+    
     public class GravityGeneratorLogic : MyGameLogicComponent
     {
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
