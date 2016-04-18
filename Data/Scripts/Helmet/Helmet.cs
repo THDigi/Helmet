@@ -17,7 +17,6 @@ using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
 using Sandbox.Game.Gui;
-using Sandbox.Graphics.GUI;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces;
 using SpaceEngineers.Game.ModAPI.Ingame;
@@ -25,6 +24,7 @@ using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.Entity.UseObject;
+using VRage.Game.Gui;
 using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI;
 using VRage.Game.ModAPI.Interfaces;
@@ -275,6 +275,9 @@ namespace Digi.Helmet
         
         private void LogicUpdate()
         {
+            if(drawHelmet)
+                drawHelmet = false;
+            
             if(isDedicatedHost)
                 return;
             
@@ -294,12 +297,11 @@ namespace Digi.Helmet
             
             if(!settings.enabled)
             {
-                RemoveHelmet();
+                RemoveHelmet(true);
                 return;
             }
             
             tick++; // global update tick
-            drawHelmet = false;
             HelmetLogicReturn ret = UpdateHelmetLogic();
             
             if(ret == HelmetLogicReturn.OK)
@@ -331,27 +333,18 @@ namespace Digi.Helmet
                 UpdateCharacterReference(null);
             }
             
-            var contrEnt = MyAPIGateway.Session.ControlledObject.Entity;
+            var controlled = MyAPIGateway.Session.ControlledObject.Entity;
             
             if(camera is IMyCharacter)
             {
                 UpdateCharacterReference(camera as IMyEntity);
             }
-            else if(contrEnt is Ingame.IMyShipController && camera is Ingame.IMyShipController)
+            else if(controlled is MyShipController && camera is MyShipController)
             {
-                if(characterEntity == null && contrEnt.Hierarchy.Children.Count > 0)
-                {
-                    foreach(var child in contrEnt.Hierarchy.Children)
-                    {
-                        if(child.Entity is IMyCharacter && child.Entity.DisplayName == MyAPIGateway.Session.Player.DisplayName)
-                        {
-                            UpdateCharacterReference(child.Entity);
-                            break;
-                        }
-                    }
-                }
+                var shipController = controlled as MyShipController;
+                UpdateCharacterReference(shipController.Pilot);
                 
-                if(settings.toggleHelmetInCockpit && characterEntity != null && contrEnt is Ingame.IMyCockpit)
+                if(settings.toggleHelmetInCockpit && characterEntity != null && controlled is Ingame.IMyCockpit)
                 {
                     if(MyGuiScreenGamePlay.ActiveGameplayScreen == null && MyGuiScreenTerminal.GetCurrentScreen() == MyTerminalPageEnum.None)
                     {
@@ -361,6 +354,10 @@ namespace Digi.Helmet
                         }
                     }
                 }
+            }
+            else
+            {
+                return HelmetLogicReturn.REMOVE_LEAVEHUD;
             }
             
             if(characterEntity != null)
@@ -520,8 +517,8 @@ namespace Digi.Helmet
                         CalculateGravityAndPlanetsAt(characterEntity.WorldAABB.Center);
                     }
                     
-                    var controller = MyAPIGateway.Session.ControlledObject as MyShipController;
-                    show[Icons.HORIZON] = ((naturalForce > 0 && controller != null && controller.HorizonIndicatorEnabled) ? 1 : 0);
+                    var shipController = MyAPIGateway.Session.ControlledObject as MyShipController;
+                    show[Icons.HORIZON] = ((naturalForce > 0 && shipController != null && shipController.HorizonIndicatorEnabled) ? 1 : 0);
                 }
             }
             else
@@ -560,18 +557,15 @@ namespace Digi.Helmet
                 
                 if(helmet != null)
                 {
-                    if(characterEntity != null)
-                        helmet.SetPosition(characterEntity.WorldMatrix.Translation + characterEntity.WorldMatrix.Backward * 1000);
-                    else
-                        helmet.SetPosition(Vector3D.Zero);
-                    
+                    var camera = MyAPIGateway.Session.Camera.WorldMatrix;
+                    helmet.SetPosition(camera.Translation + camera.Backward * 1000);
                     helmet.Close();
                     helmet = null;
                     animationStart = 0;
                 }
             }
             
-            if(removeHud)
+            if(removeHud && !removedHUD)
                 RemoveHud();
         }
         
@@ -581,10 +575,9 @@ namespace Digi.Helmet
                 return;
             
             removedHUD = true;
-            Vector3D pos = Vector3D.Zero;
             
-            if(characterEntity != null)
-                pos = characterEntity.WorldMatrix.Translation + characterEntity.WorldMatrix.Backward * 1000;
+            var camera = MyAPIGateway.Session.Camera.WorldMatrix;
+            var pos = camera.Translation + camera.Backward * 1000;
             
             for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
             {
