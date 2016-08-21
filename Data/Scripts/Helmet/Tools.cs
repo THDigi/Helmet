@@ -1,41 +1,23 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
-using System.Text;
-using System.Threading.Tasks;
-using System.IO;
-using Sandbox.Common;
 using Sandbox.Common.ObjectBuilders;
-using Sandbox.Definitions;
-using Sandbox.Engine;
-using Sandbox.Engine.Physics;
-using Sandbox.Engine.Multiplayer;
-using Sandbox.Game;
-using Sandbox.Game.Entities;
-using Sandbox.Game.Gui;
 using Sandbox.ModAPI;
-using Sandbox.ModAPI.Interfaces;
-using VRage.Common.Utils;
 using VRage.Game;
 using VRage.Game.ModAPI;
-using VRageMath;
-using VRage;
 using VRage.ObjectBuilders;
 using VRage.Game.Components;
 using VRage.ModAPI;
-using VRage.Utils;
 using Digi.Utils;
 
 namespace Digi.Helmet
 {
     public class Item : MyGameLogicComponent
     {
-        private MyObjectBuilder_EntityBase objectBuilder;
+        private MyObjectBuilder_EntityBase obj;
         
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            this.objectBuilder = objectBuilder;
+            obj = objectBuilder;
             Entity.NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
         
@@ -51,9 +33,11 @@ namespace Digi.Helmet
                     if(charObj.HandWeapon != null && Entity.EntityId == charObj.HandWeapon.EntityId)
                     {
                         Helmet.holdingTool = Entity;
-                        Helmet.holdingToolTypeId = objectBuilder.TypeId;
+                        Helmet.holdingToolTypeId = obj.TypeId;
                     }
                 }
+                
+                obj = null;
             }
             catch(Exception e)
             {
@@ -63,7 +47,7 @@ namespace Digi.Helmet
         
         public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)
         {
-            return copy ? (MyObjectBuilder_EntityBase)objectBuilder.Clone() : objectBuilder;
+            return Entity.GetObjectBuilder(copy);
         }
     }
     

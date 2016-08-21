@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+<CubeBlocks>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>Helmet_vignette</SubtypeId>
+		</Id>
+		<DisplayName>Helmet_vignette</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\Vignette.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>Helmet_vignetteNoReflection</SubtypeId>
+		</Id>
+		<DisplayName>Helmet_vignetteNoReflection</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\Vignette_NoReflection.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>Helmet_vignetteBroken</SubtypeId>
+		</Id>
+		<DisplayName>Helmet_vignetteBroken</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\Vignette_Broken.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_health</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_health</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\Health.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_healthBar</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_healthBar</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\HealthBar.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_energy</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_energy</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\Energy.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_energyBar</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_energyBar</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\EnergyBar.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_oxygen</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_oxygen</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\Oxygen.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_oxygenBar</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_oxygenBar</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\OxygenBar.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_oxygenenv0</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_oxygenenv0</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\OxygenEnv0.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_oxygenenv1</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_oxygenenv1</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\OxygenEnv1.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_oxygenenv2</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_oxygenenv2</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\OxygenEnv2.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_hydrogen</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_hydrogen</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\Hydrogen.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_hydrogenBar</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_hydrogenBar</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\HydrogenBar.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_inventory</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_inventory</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\Inventory.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_inventoryBar</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_inventoryBar</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\InventoryBar.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_horizon</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_horizon</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\HorizonCrosshair.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+	<Definition>
+		<Id>
+			<TypeId>CubeBlock</TypeId>
+			<SubtypeId>HelmetHUD_horizonBar</SubtypeId>
+		</Id>
+		<DisplayName>HelmetHUD_horizonBar</DisplayName>
+		<Icon>Textures\FAKE.dds</Icon>
+		<CubeSize>Small</CubeSize>
+		<BlockTopology>TriangleMesh</BlockTopology>
+		<Size x="1" y="1" z="1" />
+		<ModelOffset x="0" y="0" z="0" />
+		<Model>Models\HorizonBar.mwm</Model>
+		<Components>
+			<Component Subtype="SteelPlate" Count="1" />
+		</Components>
+		<CriticalComponent Subtype="SteelPlate" Index="0" />
+		<EdgeType>Light</EdgeType>
+		<BuildTimeSeconds>999999</BuildTimeSeconds>
+		<Public>false</Public>
+	</Definition>
+
+</CubeBlocks>
+</Definitions>

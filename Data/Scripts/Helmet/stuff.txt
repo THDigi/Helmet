@@ -27,6 +27,1553 @@
 
 
 
+        // TODO move to top
+        public class Particle
+        {
+            public Vector3 position;
+            public Vector3 velocity;
+            public float radius;
+            public float angle;
+            public float alpha;
+
+            private readonly int hashCode = 0;
+            private static int uniqueHashCode = 0;
+
+            public Particle()
+            {
+                unchecked
+                {
+                    uniqueHashCode++;
+                    hashCode = uniqueHashCode;
+                }
+            }
+
+            public override int GetHashCode()
+            {
+                return hashCode;
+            }
+
+            public override bool Equals(object obj)
+            {
+                var other = obj as Particle;
+
+                if(other == null)
+                    return false;
+
+                return this.hashCode == other.hashCode;
+            }
+
+            public static bool operator ==(Particle l, Particle r)
+            {
+                if(ReferenceEquals(l, r))
+                    return true;
+
+                if(ReferenceEquals(l, null) || ReferenceEquals(r, null))
+                    return false;
+
+                return l.Equals(r);
+            }
+
+            public static bool operator !=(Particle l, Particle r)
+            {
+                return !(l == r);
+            }
+        }
+
+        private readonly HashSet<Particle> dustParticles = new HashSet<Particle>();
+        private readonly HashSet<Particle> removedustParticles = new HashSet<Particle>();
+        private float speedAlpha = 0f;
+        private MyLight[] lights = new MyLight[2];
+
+        public class CharacterLightData
+        {
+            public readonly IMyCharacter character;
+            public MyLight[] lights = new MyLight[2];
+
+            public CharacterLightData(IMyCharacter character)
+            {
+                this.character = character;
+            }
+        }
+
+        public static readonly Dictionary<long, CharacterLightData> characterEntities = new Dictionary<long, CharacterLightData>();
+
+        public static readonly Color DUST_PARTICLE_COLOR = Color.Wheat;
+
+        private const float CONE_LIGHT_RANGE = 120f;
+        private const float CONE_DEGREES = 70f;
+        private const float CONE_END_OFFSET = 15;
+        private const float CONE_BASE_RADIUS = 56; // for 120 length and 70deg
+        private const float CONE_DUST_LENGTH = 6;
+
+        private void GetLightConeData(bool left, float range, float sideOffset, out Vector3D tip, out Vector3D end, out Vector3D dir)
+        {
+            var side = (left ? headMatrix.Left : headMatrix.Right);
+            var center = headMatrix.Translation + headMatrix.Up * 0.15 + headMatrix.Forward * 0.1;
+            tip = center + side * 0.2;
+            end = center + side * sideOffset + headMatrix.Forward * range;
+            dir = Vector3D.Normalize(end - tip);
+        }
+
+        /*
+        private void UpdateLight(ref MyLight[] lights, int index, bool on = false, bool remove = false, bool useModelMatrix = false, MatrixD matrix = default(MatrixD))
+        {
+            var light = lights[index];
+
+            if(remove)
+            {
+                if(light != null)
+                {
+                    MyLights.RemoveLight(light);
+                    lights[index] = null;
+                }
+
+                return;
+            }
+
+            Vector3D coneTip, coneEnd, coneDir;
+            GetLightConeData(index == 0, CONE_LIGHT_RANGE, CONE_END_OFFSET, out coneTip, out coneEnd, out coneDir);
+
+            if(on)
+            {
+            }
+            else
+            {
+                if(light != null && light.LightOn)
+                {
+                    light.LightOn = false;
+                    light.ReflectorOn = false;
+                    light.UpdateLight();
+                }
+            }
+
+            if(on && settings.lightBeams > 0 && lightBeamIntensity > 0)
+            {
+                const float coneEndOffset = 0.5f * CONE_END_OFFSET;
+
+                GetLightConeData(index == 0, CONE_LIGHT_RANGE, coneEndOffset, out coneTip, out coneEnd, out coneDir);
+
+                coneTip += headMatrix.Backward * 0.1; // offset cone tip to not see the light beam start sprite as a circle
+
+                float step = 0.001f;
+                float alpha = 0.03f;
+
+                const float stepMul = 1.333f;
+                const float alphaMul = 0.95f;
+                const float maxRadius = 135;
+                const float alphaLimit = 0.018f;
+
+                while(step < 1)
+                {
+                    var finalAlpha = alpha * lightBeamIntensity;
+
+                    if(finalAlpha <= alphaLimit)
+                        break;
+
+                    var pos = Vector3D.Lerp(coneTip, coneEnd, step);
+                    var radius = MathHelper.Lerp(0, maxRadius, step);
+
+                    MyTransparentGeometry.AddPointBillboard("LightBeamPart", Color.White * finalAlpha, pos, radius, 0);
+
+                    step *= stepMul;
+                    alpha *= alphaMul;
+                }
+            }
+        }
+        */
+
+        // TODO rethink for usage in all characters
+        private void UpdateLight(int index, bool on = false, bool remove = false)
+        {
+            var light = lights[index];
+
+            if(remove)
+            {
+                if(light != null)
+                {
+                    MyLights.RemoveLight(light);
+                    lights[index] = null;
+                }
+
+                return;
+            }
+
+            Vector3D coneTip, coneEnd, coneDir;
+            GetLightConeData(index == 0, CONE_LIGHT_RANGE, CONE_END_OFFSET, out coneTip, out coneEnd, out coneDir);
+
+            if(on)
+            {
+                if(light == null)
+                {
+                    light = MyLights.AddLight();
+                    light.Start(MyLight.LightTypeEnum.Spotlight, 1f);
+                    light.LightOwner = MyLight.LightOwnerEnum.SmallShip;
+                    light.ReflectorTexture = pathToMod + @"Textures\Light.dds";
+                    light.UseInForwardRender = true;
+                    light.ReflectorConeDegrees = CONE_DEGREES;
+                    light.ReflectorColor = Color.White;
+                    light.ReflectorIntensity = 3f;
+                    light.ReflectorFalloff = 5f;
+                    light.ReflectorRange = CONE_LIGHT_RANGE;
+                    light.ShadowDistance = light.ReflectorRange;
+                    light.CastShadows = true;
+
+                    lights[index] = light;
+                }
+
+                if(!light.LightOn)
+                {
+                    light.LightOn = true;
+                    light.ReflectorOn = true;
+                }
+
+                light.Position = coneTip;
+                light.ReflectorDirection = coneDir;
+                light.ReflectorUp = headMatrix.Up;
+
+                if(!drawHelmet)
+                {
+                    var skinned = characterEntity as MySkinnedEntity;
+                    int headBone;
+
+                    if(skinned.AnimationController.FindBone("SE_RigHead", out headBone) != null)
+                    {
+                        var charMatrix = characterEntity.WorldMatrix;
+                        var boneMatrix = skinned.BoneAbsoluteTransforms[headBone];
+
+                        light.Position = charMatrix.Translation + Vector3D.TransformNormal(boneMatrix.Translation, charMatrix);
+                        light.Position += (index == 0 ? charMatrix.Left : charMatrix.Right) * 0.2;
+
+                        light.ReflectorDirection = Vector3D.TransformNormal(boneMatrix.Up, charMatrix);
+
+                        // project and remove the left/right direction
+                        light.ReflectorDirection = Vector3D.Normalize(light.ReflectorDirection - (charMatrix.Right * charMatrix.Right.Dot(light.ReflectorDirection)));
+                        light.ReflectorUp = Vector3D.Cross(light.ReflectorDirection, charMatrix.Left);
+                    }
+                    else
+                    {
+                        // fallback in case we can't find the head bone for some reason
+                        var charCtrl = MyAPIGateway.Session.ControlledObject as IMyControllableEntity;
+                        var matrix = charCtrl.GetHeadMatrix(false, false, true, true);
+                        light.Position = matrix.Translation + (index == 0 ? matrix.Left : matrix.Right) * 0.2;
+                        light.ReflectorUp = matrix.Up;
+                        light.ReflectorDirection = matrix.Forward;
+                    }
+                }
+
+                light.UpdateLight();
+            }
+            else
+            {
+                if(light != null && light.LightOn)
+                {
+                    light.LightOn = false;
+                    light.ReflectorOn = false;
+                    light.UpdateLight();
+                }
+            }
+
+            if(on && drawHelmet && settings.lightBeams > 0 && lightBeamIntensity > 0)
+            {
+                const float coneEndOffset = 0.5f * CONE_END_OFFSET;
+
+                GetLightConeData(index == 0, CONE_LIGHT_RANGE, coneEndOffset, out coneTip, out coneEnd, out coneDir);
+
+                coneTip += headMatrix.Backward * 0.1; // offset cone tip to not see the light beam start sprite as a circle
+
+                float step = 0.001f;
+                float alpha = 0.03f;
+
+                const float stepMul = 1.333f;
+                const float alphaMul = 0.95f;
+                const float maxRadius = 135;
+                const float alphaLimit = 0.018f;
+
+                while(step < 1)
+                {
+                    var finalAlpha = alpha * lightBeamIntensity;
+
+                    if(finalAlpha <= alphaLimit)
+                        break;
+
+                    var pos = Vector3D.Lerp(coneTip, coneEnd, step);
+                    var radius = MathHelper.Lerp(0, maxRadius, step);
+
+                    MyTransparentGeometry.AddPointBillboard("LightBeamPart", Color.White * finalAlpha, pos, radius, 0);
+
+                    step *= stepMul;
+                    alpha *= alphaMul;
+                }
+            }
+        }
+
+		
+        private bool IsInCone(Vector3D checkPos, Vector3D coneTip, Vector3D coneDir, float coneLength, float coneRadius, out float edgeAlpha)
+        {
+            var diff = checkPos - coneTip;
+            var coneDist = Vector3D.Dot(diff, coneDir);
+            edgeAlpha = 1;
+
+            if(coneDist < 0 || coneDist > coneLength)
+                return false;
+
+            var radSq = (coneDist / coneLength) * coneRadius;
+            radSq *= radSq;
+            var orthDistSq = (diff - coneDist * coneDir).LengthSquared();
+
+            if(orthDistSq < radSq)
+            {
+                const double ALPHA_DIST_RATIO = 0.5;
+                const double MUL = 1 / ALPHA_DIST_RATIO;
+
+                edgeAlpha = (float)(Math.Min(1.0 - (orthDistSq / radSq), ALPHA_DIST_RATIO) * MUL);
+                return true;
+            }
+
+            return false;
+        }
+
+        // TODO is this broken?!
+
+        /*
+        private bool IsInCone(Vector3D pos, Vector3D tip, Vector3D dir, float length, float radius, out float alpha)
+        {
+            var diff = pos - tip;
+            alpha = 1;
+            
+            if(diff.LengthSquared() > length * length)
+                return false;
+            
+            var dot = Vector3D.Dot(diff, dir);
+            
+            if(0 <= dot && dot <= length)
+            {
+                var radSq = (dot / length) * radius;
+                radSq *= radSq;
+                var orthDistSq = (diff - (dot * dir)).LengthSquared();
+                
+                if(orthDistSq < radSq)
+                {
+                    alpha = (float)Math.Min(1.0 - (orthDistSq / radSq), 0.25) * 4;
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+         */
+
+
+		// in draw()
+
+                if(characterEntity == null)
+                    return;
+
+                if(settings.lightReplace > 0)
+                {
+                    bool lightsOn = characterEntity.EnabledLights;
+
+                    if(settings.lightBeams == 2)
+                    {
+                        if(tick % 60 == 0)
+                        {
+                            airDensity = characterEntity.EnvironmentOxygenLevel;
+
+                            if(airDensity <= 0) // if there's no oxygen around, check if there's an atmosphere
+                            {
+                                var pos = characterEntity.WorldMatrix.Translation;
+                                int planetNum = 0;
+
+                                foreach(var kv in planets)
+                                {
+                                    var planet = kv.Value;
+
+                                    if(planet == null || planet.Closed)
+                                        continue;
+
+                                    airDensity += planet.GetAirDensity(pos);
+                                    planetNum++;
+                                }
+
+                                if(airDensity > 0)
+                                    airDensity /= planetNum;
+
+                                // HACK scenario not accounted for: on a planet but inside a depressurized ship
+                            }
+                        }
+
+                        var atmosphereDiff = airDensity - lightBeamIntensity;
+                        var atmosphereDiffAbs = Math.Abs(atmosphereDiff);
+
+                        if(atmosphereDiffAbs > float.Epsilon)
+                        {
+                            float step = Math.Max(atmosphereDiffAbs / 60f, 0.000001f);
+
+                            if(lightBeamIntensity > airDensity)
+                                lightBeamIntensity = Math.Max(lightBeamIntensity - step, airDensity);
+                            else
+                                lightBeamIntensity = Math.Min(lightBeamIntensity + step, airDensity);
+                        }
+                    }
+                    else if(settings.lightBeams == 1)
+                    {
+                        lightBeamIntensity = 1;
+                    }
+
+                    UpdateLight(0, lightsOn);
+                    UpdateLight(1, lightsOn);
+
+                    if(drawHelmet && lightsOn && settings.lightDustParticles > 0 && lightBeamIntensity > 0)
+                    {
+                        const float ignoreUpToSpeedSq = 7 * 7;
+                        const float visibleMaxSpeedSq = 3 * 3;
+                        const float alphaStep = 0.008f;
+                        float speedSq = Math.Max(characterEntity.Physics.LinearVelocity.LengthSquared() - ignoreUpToSpeedSq, 0);
+                        float targetAlpha = 1f - (Math.Min(speedSq, visibleMaxSpeedSq) / visibleMaxSpeedSq);
+
+                        if(speedAlpha > targetAlpha)
+                            speedAlpha = Math.Max(speedAlpha - alphaStep, targetAlpha);
+                        else if(speedAlpha < targetAlpha)
+                            speedAlpha = Math.Min(speedAlpha + alphaStep, targetAlpha);
+
+                        if(speedAlpha <= 0)
+                        {
+                            if(dustParticles.Count > 0)
+                            {
+                                dustParticles.Clear();
+                                removedustParticles.Clear();
+                            }
+                        }
+                        else
+                        {
+                            const float lengthRatio = (CONE_DUST_LENGTH / CONE_LIGHT_RANGE);
+                            const float coneBaseRadius = lengthRatio * CONE_BASE_RADIUS;
+                            const float coneEndOffset = lengthRatio * CONE_END_OFFSET;
+
+                            Vector3D coneTipLeft, coneEndLeft, coneDirLeft;
+                            Vector3D coneTipRight, coneEndRight, coneDirRight;
+                            GetLightConeData(true, CONE_DUST_LENGTH, coneEndOffset, out coneTipLeft, out coneEndLeft, out coneDirLeft);
+                            GetLightConeData(false, CONE_DUST_LENGTH, coneEndOffset, out coneTipRight, out coneEndRight, out coneDirRight);
+
+                            // HACK DEBUG
+                            //{
+                            //    var m = MatrixD.CreateWorld(coneTipLeft, coneDirLeft, headMatrix.Up);
+                            //    var c = Color.Red * 0.1f;
+                            //    MySimpleObjectDraw.DrawTransparentCone(ref m, coneBaseRadius, CONE_LENGTH, ref c, 20, "Square");
+                            //}
+
+                            int maxParticles = (settings.lightDustParticles == 1 ? 15 : 30);
+                            const float stepSize = 0.1f;
+                            const float startStep = 0.03f;
+                            float step = startStep;
+
+                            while(dustParticles.Count < maxParticles)
+                            {
+                                if(step > 1)
+                                    step = startStep;
+
+                                step += stepSize;
+
+                                if(rand.Next(100) > 25)
+                                    continue;
+
+                                var start = (rand.Next(2) == 0 ? coneTipLeft : coneTipRight);
+                                var dir = (rand.Next(2) == 0 ? coneDirLeft : coneDirRight);
+
+                                var radius = step * coneBaseRadius;
+                                var theta = rand.NextDouble() * Math.PI * 2;
+                                var distance = Math.Sqrt(rand.NextDouble()) * radius;
+                                var x = distance * Math.Cos(theta);
+                                var y = distance * Math.Sin(theta);
+
+                                dustParticles.Add(new Particle()
+                                {
+                                    position = start + (dir * step * CONE_DUST_LENGTH) + (headMatrix.Left * x) + (headMatrix.Up * y),
+                                    velocity = 0.002f * rand.Next(11) * new Vector3(rand.Next(-2, 2), rand.Next(-2, 2), rand.Next(-2, 2)),
+                                    radius = Math.Max(0.013f * (float)rand.NextDouble(), 0.002f),
+                                    angle = rand.Next(-90, 90),
+                                    alpha = 0.23f + ((float)rand.NextDouble() * 0.03f),
+                                });
+                            }
+
+                            if(dustParticles.Count > 0)
+                            {
+                                var particleIndex = 0;
+
+                                foreach(var p in dustParticles)
+                                {
+                                    if(++particleIndex > maxParticles)
+                                    {
+                                        removedustParticles.Add(p);
+                                        continue;
+                                    }
+
+                                    float edgeAlpha1 = 1;
+                                    float edgeAlpha2 = 1;
+
+                                    if(!IsInCone(p.position, coneTipLeft, coneDirLeft, CONE_DUST_LENGTH, coneBaseRadius, out edgeAlpha1)
+                                       && !IsInCone(p.position, coneTipRight, coneDirRight, CONE_DUST_LENGTH, coneBaseRadius, out edgeAlpha2))
+                                    {
+                                        removedustParticles.Add(p);
+                                        continue;
+                                    }
+
+                                    var distSq = (float)Vector3D.DistanceSquared(headMatrix.Translation, p.position);
+                                    var halfLengthSq = (CONE_DUST_LENGTH / 2);
+                                    halfLengthSq *= halfLengthSq;
+                                    float distAlpha = 1f;
+                                    const float minDistSq = (0.3f * 0.3f);
+
+                                    if(distSq > halfLengthSq)
+                                        distAlpha = distSq / (CONE_DUST_LENGTH * CONE_DUST_LENGTH);
+                                    else if(distSq < minDistSq)
+                                        distAlpha = distSq / minDistSq;
+
+                                    MyTransparentGeometry.AddPointBillboard("Stardust", DUST_PARTICLE_COLOR * p.alpha * lightBeamIntensity * distAlpha * speedAlpha * edgeAlpha1 * edgeAlpha2, p.position, p.radius, p.angle);
+
+                                    if(p.angle > 0)
+                                        p.angle += 0.001f;
+                                    else
+                                        p.angle -= 0.001f;
+
+                                    p.position += p.velocity / 60.0f;
+                                }
+
+                                if(removedustParticles.Count > 0)
+                                {
+                                    foreach(var p in removedustParticles)
+                                    {
+                                        dustParticles.Remove(p);
+                                    }
+
+                                    removedustParticles.Clear();
+                                }
+                            }
+                        }
+                    }
+
+                    var camPos = MyAPIGateway.Session.Camera.WorldMatrix.Translation;
+                    const int CHARACTER_LIGHT_LOD_DIST_SQ = 500;
+
+                    foreach(var charLight in characterEntities.Values)
+                    {
+                        if(charLight.character.EnabledLights)
+                        {
+                            var m = charLight.character.WorldMatrix;
+                            var head = m.Translation + m.Up * 1.6;
+
+                            MyTransparentGeometry.AddLineBillboard("Square", Color.Red, head, m.Forward, 10, 0.05f); // DEBUG
+                        }
+                    }
+                }
+                else
+                {
+                    foreach(var charLight in characterEntities.Values)
+                    {
+                        charLight.lights[0] = null;
+                        charLight.lights[1] = null;
+                    }
+
+                    UpdateLight(0, remove: true);
+                    UpdateLight(1, remove: true);
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if(showIcons[Icons.MARKERS] > 0 && (settings.markerShowAntennas || settings.markerShowBeacons || settings.markerShowBlocks || settings.markerShowGPS) && (hudEntityMarkers.Count > 0 || hudGPSMarkers.Count > 0))
+                {
+                    // TODO REMOVE!!!!!! moved to Draw()
+                    
+                    const double AIM_ACCURACY = 0.999;
+                    
+                    var cam = MyAPIGateway.Session.Camera;
+                    var camMatrix = cam.WorldMatrix;
+                    tmp.Clear();
+                    selectedMarkers.Clear();
+                    
+                    foreach(var kv in hudEntityMarkers)
+                    {
+                        var ent = kv.Key;
+                        var dir = (ent.GetPosition() - camMatrix.Translation);
+                        var dist = (float)dir.Normalize();
+                        var dot = dir.Dot(camMatrix.Forward);
+                        
+                        if(dot >= AIM_ACCURACY)
+                        {
+                            var marker = kv.Value;
+                            
+                            tmp.Clear();
+                            tmp.Append(DISPLAY_PAD).Append(" ");
+                            MyValueFormatter.AppendDistanceInBestUnit(dist, tmp);
+                            tmp.Append(" ").Append(marker.name);
+                            
+                            selectedSort.Add(dist, tmp.ToString());
+                            selectedMarkers.Add(ent.EntityId);
+                        }
+                    }
+                    
+                    foreach(var gps in hudGPSMarkers)
+                    {
+                        if(!gps.ShowOnHud)
+                            continue;
+                        
+                        var dir = (gps.Coords - camMatrix.Translation);
+                        var dist = (float)dir.Normalize();
+                        var dot = dir.Dot(camMatrix.Forward);
+                        
+                        if(dot >= AIM_ACCURACY)
+                        {
+                            tmp.Clear();
+                            tmp.Append(DISPLAY_PAD).Append(" ");
+                            MyValueFormatter.AppendDistanceInBestUnit(dist, tmp);
+                            tmp.Append(" ").Append(gps.Name);
+                            
+                            selectedSort.Add(dist, tmp.ToString());
+                            selectedMarkers.Add(gps.Hash);
+                        }
+                    }
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                // TODO << HELMET VIGNETTE AS SPRITE?
+                /*
+                float reflection = (float)Dev.GetValueScroll("glassReflection", 0.01, 0.001, MyKeys.NumPad0);
+                float scale = (float)Dev.GetValueScroll("glassScale", 0.1, 0.01, MyKeys.NumPad1);
+                MyTransparentGeometry.AddBillboardOriented("HelmetVignette", Color.White, helmetMatrix.Translation, helmetMatrix.Up, helmetMatrix.Left, scale, 0, false, -1, reflection);
+                 */
+                
+
+
+
+
+
+
+
+
+
+                    const double CONE_ALIGN_DOT = 0.999;
+                    const double CONE_ALIGN_MAXALPHA = 70;
+                    
+
+
+
+                        var absDot = Math.Abs(dot);
+                        
+                        // making the arrow brighter the more aligned the view is to the vector TODO ??
+                        if(absDot >= CONE_ALIGN_DOT)
+                            color.A = Math.Max((byte)(CONE_ALIGN_MAXALPHA * ((absDot - CONE_ALIGN_DOT) / (1 - CONE_ALIGN_DOT))), CONE_ALPHA);
+                        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// LCD menu
+
+        // TODO testing/remove?
+        private List<string> menu = new List<string>()
+        {
+            "Coms",
+            "Suit",
+            "Vehicle",
+            "Tool",
+            "Config",
+        };
+        private int menuIndex = 0;
+        private int configIndex = 0;
+        private bool inConfig = false;
+        
+        private List<string> configMenu = new List<string>()
+        {
+            "WAT: OFF",
+            "Suicide",
+            "...",
+        };
+        
+
+
+                // TODO testing/remove
+                /*
+                {
+                    if(menuIndex == 4)
+                    {
+                        if(MyAPIGateway.Input.IsNewMousePressed(MyMouseButtonsEnum.Middle))
+                            inConfig = !inConfig;
+                    }
+                    else
+                    {
+                        inConfig =false;
+                    }
+                    
+                    if(!MyAPIGateway.Input.IsAnyCtrlKeyPressed())
+                    {
+                        var scroll = MyAPIGateway.Input.DeltaMouseScrollWheelValue();
+                        
+                        if(scroll < 0)
+                        {
+                            if(inConfig)
+                                configIndex = Math.Min(configIndex + 1, configMenu.Count - 1);
+                            else
+                                menuIndex = Math.Min(menuIndex + 1, menu.Count - 1);
+                        }
+                        else if(scroll > 0)
+                        {
+                            if(inConfig)
+                                configIndex = Math.Max(configIndex - 1, 0);
+                            else
+                                menuIndex = Math.Max(menuIndex - 1, 0);
+                        }
+                    }
+                    
+                    var str = new StringBuilder();
+                    
+                    //str.Autowrap(80, MyFontEnum.DarkBlue, 1);
+                    
+                    for(int i = 0; i < menu.Count; i++)
+                    {
+                        if(i == menuIndex)
+                            str.Append("[ ");
+                        else
+                            str.Append("  ");
+                        
+                        str.Append(menu[i]);
+                        
+                        if(i == menuIndex)
+                            str.Append(" ]");
+                        
+                        str.AppendLine();
+                    }
+                    
+                    str.AppendLine();
+                    str.AppendLine();
+                    
+                    switch(menuIndex)
+                    {
+                        case 0:
+                            {
+                                foreach(var kv in MyHud.Chat.MessagesQueue)
+                                {
+                                    var s = kv.ToString().Substring(1);
+                                    var i = s.IndexOf(", ", StringComparison.Ordinal);
+                                    var name = s.Substring(0, i);
+                                    var msg = s.Substring(i + 2, s.Length - i - 3);
+                                    str.AppendLine(" "+name+": "+msg);
+                                }
+                                
+                                break;
+                            }
+                        case 1:
+                            {
+                                str.AppendLine("Gravity: 1 Gee");
+                                str.AppendLine("Altitude: N/A");
+                                str.AppendLine("Longitude ??");
+                                str.AppendLine("Latitude: ??");
+                                break;
+                            }
+                        case 2:
+                            {
+                                str.AppendLine("Thrusers: Full POWAH");
+                                str.AppendLine("Stuff: nil");
+                                break;
+                            }
+                        case 3:
+                            {
+                                str.AppendLine("Ammo: 0");
+                                break;
+                            }
+                        case 4:
+                            {
+                                for(int i = 0; i < configMenu.Count; i++)
+                                {
+                                    if(i == configIndex)
+                                        str.Append("[ ");
+                                    else
+                                        str.Append("  ");
+                                    
+                                    str.Append(configMenu[i]);
+                                    
+                                    if(i == configIndex)
+                                        str.Append(" ]");
+                                    
+                                    str.AppendLine();
+                                }
+                                
+                                break;
+                            }
+                    }
+                    
+                    panel.WritePublicText(str.ToString(), false);
+                    panel.ShowTextureOnScreen();
+                    panel.ShowPublicTextOnScreen();
+                    
+                    return;
+                }
+                 */
+                
+                // TODO testing/remove
+                /*
+                {
+                    // TODO on world load: MyHud.Chat.MessagesQueue.Clear();
+                    
+                    var t = new StringBuilder();
+                    
+                    foreach(var kv in MyHud.Chat.MessagesQueue)
+                    {
+                        var s = kv.ToString().Substring(1);
+                        var i = s.IndexOf(", ", StringComparison.Ordinal);
+                        
+                        var name = s.Substring(0, i);
+                        var msg = s.Substring(i + 2, s.Length - i - 3);
+                        
+                        t.AppendLine(" "+name+": "+msg);
+                    }
+                    
+                    panel.WritePublicText(t.ToString(), false);
+                    panel.ShowTextureOnScreen();
+                    panel.ShowPublicTextOnScreen();
+                    
+                    return;
+                }
+                 */
+                
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// gps markers
+
+
+                // TODO use cached list
+                var gps = MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Session.Player.IdentityId);
+                const float markerSize = 0.001f;
+                
+                foreach(var marker in gps) // TODO GPS MARKER?
+                {
+                    if(!marker.ShowOnHud)
+                        continue;
+                    
+                    var dir = marker.Coords - viewPos;
+                    dir.Normalize();
+                    var target = viewPos + dir * 0.1;
+                    
+                    MyTransparentGeometry.AddBillboardOriented("HelmetMarkerGPS", Color.Teal, target, matrix.Up, matrix.Right, markerSize, 0, true, -1, 0);
+                }
+                
+                /*
+                foreach(var marker in MyHud.LocationMarkers.MarkerEntities)
+                {
+                    var dir = marker.Key.WorldMatrix.Translation - viewPos;
+                    float dist = (float)dir.Normalize();
+                    
+                    //var dotH = camera.WorldMatrix.Left.Dot(dir);
+                    //var dotV = camera.WorldMatrix.Up.Dot(dir);
+                    //
+                    //MyAPIGateway.Utilities.ShowNotification("dotH="+Math.Round(dotH, 3)+", dotV="+Math.Round(dotV, 3), 16, MyFontEnum.Red);
+                    //
+                    //if(dotH > 0.7 || dotH < -0.7 || dotV > 0.5 || dotV < -0.5)
+                    //{
+                    //    dir = camera.WorldMatrix.Forward + camera.WorldMatrix.Left * MathHelper.Clamp(dotH, -0.7, 0.7) + camera.WorldMatrix.Up * MathHelper.Clamp(dotV, -0.5, 0.5);
+                    //    dir.Normalize();
+                    //}
+                    
+                    var target = viewPos + dir * 0.1;
+                    dist = MathHelper.Clamp(0.0001f * dist, 0.0001f, 0.001f);
+                    
+                    // RedDotIgnoreDepth
+                    MyTransparentGeometry.AddBillboardOriented("ArrowRightGreen", Color.White, target, matrix.Left, matrix.Up, dist, 0, true, -1, 0);
+                    
+                    var normalizedCoord = new Vector2(1920/2.0f, 1080/2.0f);
+                    var vector = new Vector2(0.5f, 0.1f);
+                    MyGuiScreenHudBase.DrawFog(ref normalizedCoord, ref vector);
+                }
+                 */
+                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        public static IMyEntity selected = null; // TODO REMOVE!!!
+        
+            // bot copy/pasting
+            try
+            {
+                if(characterEntity != null)
+                {
+                    selected = null;
+                    var sphere = new BoundingSphereD(characterEntity.WorldMatrix.Translation, 5);
+                    var ents = MyAPIGateway.Entities.GetEntitiesInSphere(ref sphere);
+                    
+                    foreach(var e in ents)
+                    {
+                        var c = e as IMyCharacter;
+                        
+                        if(c.IsBot)
+                        {
+                            selected = e;
+                            MyAPIGateway.Utilities.ShowNotification("selected="+e, 16);
+                            break;
+                        }
+                    }
+                    
+                    if(selected == null)
+                        MyAPIGateway.Utilities.ShowNotification("NOTHING SELECTED!", 16);
+                }
+            }
+            catch(Exception)
+            {
+            }
+            
+
+
+                
+                
+                
+                
+                
+                
+                // TODO TESTING/REMOVE
+                if(msg.StartsWith("c"))
+                {
+                    if(selected != null)
+                    {
+                        var matrix = MyAPIGateway.Session.ControlledObject.Entity.WorldMatrix;
+                        
+                        var obj = selected.GetObjectBuilder(true);
+                        
+                        obj.PositionAndOrientation = new MyPositionAndOrientation(matrix.Translation + matrix.Forward * 3, matrix.Forward, matrix.Up);
+                        
+                        MyAPIGateway.Entities.RemapObjectBuilder(obj);
+                        
+                        var ent = MyAPIGateway.Entities.CreateFromObjectBuilderAndAdd(obj);
+                        
+                        MyAPIGateway.Utilities.ShowNotification("copied! ent="+ent);
+                    }
+                    else
+                    {
+                        MyAPIGateway.Utilities.ShowNotification("nothing to copy!");
+                    }
+                    
+                    return;
+                }
+                
+
+
+
+
+
+
+
+
+
+                            
+                            /* old crappy method
+                            while(dustParticles.Count < 5000)
+                            {
+                                randPos = headMatrix.Translation + (headMatrix.Forward * rand.NextDouble() * coneLength) + (headMatrix.Left * 10 * (rand.NextDouble() * 2 - 1)) + (headMatrix.Up * 10 * (rand.NextDouble() * 2 - 1));
+                                
+                                if(IsInCone(randPos, coneTipLeft, coneDirLeft, coneLength, coneRadius)
+                                   || IsInCone(randPos, coneTipRight, coneDirRight, coneLength, coneRadius))
+                                {
+                                    dustParticles.Add(new Particle()
+                                                      {
+                                                          position = randPos,
+                                                          velocity = 0.3f * (float)rand.NextDouble() * new Vector3(rand.NextDouble() * 2 - 1, rand.NextDouble() * 2 - 1, rand.NextDouble() * 2 - 1),
+                                                          radius = Math.Max(0.01f * (float)rand.NextDouble(), 0.016f),
+                                                          //radius = 0.05f,
+                                                          angle = rand.Next(-90, 90),
+                                                          alpha = (float)(0.1 + (0.2 * rand.NextDouble())),
+                                                      });
+                                }
+                            }
+                             */
+
+
+
+                
+                // TODO TESTING/REMOVE?
+                if(charCtrl.EnabledLights)
+                {
+                    //var matrix = drawHelmet ? helmetMatrix : charCtrl.GetHeadMatrix(true, true);
+                    
+                    // TODO use settings.replaceHeadlamp ?
+                    
+                    const float visibleMaxSpeedSq = 10*10;
+                    const float alphaStep = 0.008f;
+                    float speedSq = characterEntity.Physics.LinearVelocity.LengthSquared();
+                    float targetAlpha = 1f - (Math.Min(speedSq, visibleMaxSpeedSq) / visibleMaxSpeedSq);
+                    
+                    if(speedAlpha > targetAlpha)
+                        speedAlpha = Math.Max(speedAlpha - alphaStep, targetAlpha);
+                    else if(speedAlpha < targetAlpha)
+                        speedAlpha = Math.Min(speedAlpha + alphaStep, targetAlpha);
+                    
+                    const float coneLength = 20f;
+                    const float coneRadius = 4f;
+                    
+                    var pos = headMatrix.Translation + headMatrix.Up * 0.1 + headMatrix.Backward * 1;
+                    var coneTipLeft = pos + headMatrix.Left * 0.2;
+                    var coneTipRight = pos + headMatrix.Right * 0.2;
+                    var coneEndLeft = coneTipLeft + headMatrix.Left * 5 + headMatrix.Forward * coneLength;
+                    var coneEndRight = coneTipRight + headMatrix.Right * 5 + headMatrix.Forward * coneLength;
+                    var coneDirLeft = Vector3D.Normalize(coneEndLeft - coneTipLeft);
+                    var coneDirRight = Vector3D.Normalize(coneEndRight - coneTipRight);
+                    
+                    if(speedAlpha > 0)
+                    {
+                        var randPos = default(Vector3D);
+                        
+                        while(dustParticles.Count < 100)
+                        {
+                            randPos = headMatrix.Translation + (headMatrix.Forward * rand.NextDouble() * coneLength * 0.5) + (headMatrix.Left * 10 * (rand.NextDouble() * 2 - 1)) + (headMatrix.Up * 10 * (rand.NextDouble() * 2 - 1));
+                            
+                            if(IsInCone(randPos, coneTipLeft, coneDirLeft, coneLength, coneRadius)
+                               || IsInCone(randPos, coneTipRight, coneDirRight, coneLength, coneRadius))
+                            {
+                                dustParticles.Add(new Particle()
+                                                  {
+                                                      position = randPos,
+                                                      velocity = 0.3f * (float)rand.NextDouble() * new Vector3(rand.NextDouble() * 2 - 1, rand.NextDouble() * 2 - 1, rand.NextDouble() * 2 - 1),
+                                                      life = (short)rand.Next(240, 480),
+                                                      radius = Math.Max(0.01f * (float)rand.NextDouble(), 0.016f),
+                                                      //radius = 0.05f,
+                                                      angle = rand.Next(-90, 90),
+                                                      alpha = (float)(0.1 + (0.2 * rand.NextDouble())),
+                                                  });
+                                
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if(dustParticles.Count > 0)
+                    {
+                        foreach(var p in dustParticles)
+                        {
+                            if(!IsInCone(p.position, coneTipLeft, coneDirLeft, coneLength, coneRadius)
+                               && !IsInCone(p.position, coneTipRight, coneDirRight, coneLength, coneRadius))
+                            {
+                                removedustParticles.Add(p);
+                                continue;
+                            }
+                            
+                            MyTransparentGeometry.AddPointBillboard("Stardust", Color.Wheat * p.alpha * speedAlpha, p.position, p.radius, p.angle);
+                            
+                            if(p.angle > 0)
+                                p.angle += 0.001f;
+                            else
+                                p.angle -= 0.001f;
+                            
+                            p.position += p.velocity / 60.0f;
+                        }
+                        
+                        if(removedustParticles.Count > 0)
+                        {
+                            foreach(var p in removedustParticles)
+                            {
+                                dustParticles.Remove(p);
+                            }
+                            
+                            removedustParticles.Clear();
+                        }
+                    }
+                }
+
+
+
+
+                /*
+                if(settings.replaceHeadlamp)
+                {
+                    if(charCtrl.EnabledLights)
+                    {
+                        // TODO when shadows work again, have the option to use two lights for more detailed shadows
+                        
+                        if(light == null)
+                        {
+                            light = MyLights.AddLight();
+                            light.Start(MyLight.LightTypeEnum.Spotlight, 1.5f);
+                            light.CastShadows = true;
+                            light.ShadowDistance = 20f;
+                            light.ReflectorFalloff = 5f;
+                            light.LightOwner = MyLight.LightOwnerEnum.SmallShip;
+                            light.UseInForwardRender = true; // ???
+                            light.ReflectorTexture = "Textures\\Lights\\dual_reflector_2.dds";
+                            light.ReflectorColor = Color.White;
+                            light.ReflectorIntensity = 4f;
+                            light.ReflectorRange = 30f;
+                            light.ReflectorConeMaxAngleCos = 0.275f;
+                            //l.Color = Color.Red;
+                            //l.SpecularColor = Color.Blue;
+                            //l.Range = 2f;
+                            //l.Intensity = 5f;
+                        }
+                        
+                        if(!light.LightOn)
+                        {
+                            light.LightOn = true;
+                            light.ReflectorOn = true;
+                        }
+                        
+                        light.ReflectorDirection = headMatrix.Forward;
+                        light.ReflectorUp = headMatrix.Up;
+                        
+                        if(drawHelmet)
+                        {
+                            light.Position = headMatrix.Translation + headMatrix.Up * 0.15 + headMatrix.Forward * 0.1;
+                        }
+                        else
+                        {
+                            var skinned = characterEntity as MySkinnedEntity;
+                            int headBone;
+                            
+                            if(skinned.AnimationController.FindBone("SE_RigHead", out headBone) == null)
+                            {
+                                light.Position = characterEntity.WorldMatrix.Translation + Vector3.TransformNormal(skinned.BoneAbsoluteTransforms[headBone].Translation, characterEntity.WorldMatrix);
+                            }
+                            else
+                            {
+                                light.Position = headMatrix.Translation + headMatrix.Up * 0.15 + headMatrix.Forward * 0.1;
+                            }
+                        }
+                        
+                        light.UpdateLight();
+                    }
+                    else if(light != null && light.LightOn)
+                    {
+                        light.LightOn = false;
+                        light.ReflectorOn = false;
+                        light.UpdateLight();
+                    }
+                }
+                else if(light != null)
+                {
+                    MyLights.RemoveLight(light);
+                    light = null;
+                }
+                 */
+                
+
+
+
+            if(settings.lightBeams > 0)
+            {
+                bool lightsOn = (characterEntity as IMyControllableEntity).EnabledLights;
+                
+                if(settings.lightBeams == 2)
+                {
+                    if(tick % 60 == 0)
+                    {
+                        airDensity = (characterEntity as IMyCharacter).EnvironmentOxygenLevel;
+                        
+                        // TODO scenario not accounted for: on a planet but inside a depressurized ship
+                        
+                        if(airDensity <= 0) // get planet air density (not just oxygen)
+                        {
+                            var pos = characterEntity.WorldMatrix.Translation;
+                            int planetNum = 0;
+                            
+                            foreach(var kv in planets)
+                            {
+                                var planet = kv.Value;
+                                
+                                if(planet == null || planet.Closed)
+                                    continue;
+                                
+                                airDensity += planet.GetAirDensity(pos);
+                                planetNum++;
+                            }
+                            
+                            if(airDensity > 0)
+                                airDensity /= planetNum;
+                        }
+                    }
+                    
+                    var atmosphereDiff = airDensity - lightBeamIntensity;
+                    var atmosphereDiffAbs = Math.Abs(atmosphereDiff);
+                    
+                    if(atmosphereDiffAbs > float.Epsilon)
+                    {
+                        float step = Math.Max(atmosphereDiffAbs / 60f, 0.000001f);
+                        
+                        if(lightBeamIntensity > airDensity)
+                            lightBeamIntensity = Math.Max(lightBeamIntensity - step, airDensity);
+                        else
+                            lightBeamIntensity = Math.Min(lightBeamIntensity + step, airDensity);
+                    }
+                }
+                else
+                {
+                    lightBeamIntensity = 1;
+                }
+                
+                if(lightsOn && lightBeamIntensity > 0)
+                {
+                    //const float maxOpacity = 0.2f;
+                    //var c = Color.White * maxOpacity * lightBeamIntensity;
+                    var pos = headMatrix.Translation + headMatrix.Up * 0.1 + headMatrix.Backward * 0.3;
+                    var posLeft = pos + headMatrix.Left * 0.2;
+                    var posRight = pos + headMatrix.Right * 0.2;
+                    
+                    /*
+                    MyTransparentGeometry.AddBillboardOriented("HelmetLightCone", c, posLeft, matrix.Up, matrix.Backward, 0.3f, 0.3f, Vector2.Zero);
+                    MyTransparentGeometry.AddBillboardOriented("HelmetLightCone", c, posRight, matrix.Down, matrix.Backward, 0.3f, 0.3f, Vector2.Zero);
+                     */
+                    
+                    const double lightMaxDist = 30.0; // TODO <<
+                    var posLeftTarget = posLeft + headMatrix.Left * 5 + headMatrix.Forward * lightMaxDist;
+                    var posRightTarget = posRight + headMatrix.Right * 5 + headMatrix.Forward * lightMaxDist;
+                    
+                    //var hit = default(Vector3D);
+                    //double maxLeft = 1;
+                    //double maxRight = 1;
+                    //
+                    //if(MyHudCrosshair.GetTarget(posLeft, posLeftTarget, ref hit))
+                    //    maxLeft = Vector3D.Distance(posLeft, hit) / lightMaxDist;
+                    //
+                    //if(MyHudCrosshair.GetTarget(posRight, posRightTarget, ref hit))
+                    //    maxRight = Vector3D.Distance(posRight, hit) / lightMaxDist;
+                    
+                    double d = 0.005;
+                    float a = 0.005f;
+                    
+                    while(d < 1)
+                    {
+                        d *= 1.3;
+                        a *= 1.15f;
+                        var r = MathHelper.Lerp(0.001f, 20f, (float)d);
+                        //var color = Color.White * 0.015f * (float)(1 - d);
+                        //var color = Color.Lerp(Color.White * 0.015f, Color.Red * 0.0001f, (float)d);
+                        //var color = Color.White * MathHelper.Lerp(0.01f, 0, (float)d) * lightBeamIntensity;
+                        var color = Color.White * (0.0003f / a) * lightBeamIntensity;
+                        
+                        //if(d < maxLeft)
+                        MyTransparentGeometry.AddPointBillboard("ReflectorGlareAlphaBlended", color, Vector3D.Lerp(posLeft, posLeftTarget, d), r, 0, 0, true, true);
+                        
+                        //if(d < maxRight)
+                        MyTransparentGeometry.AddPointBillboard("ReflectorGlareAlphaBlended", color, Vector3D.Lerp(posRight, posRightTarget, d), r, 0, 0, true, true);
+                    }
+                }
+            }
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        // TODO remove:
+        MyLight l;
+        
+                // TODO testing/remove
+                {
+                    var matrix = helmetMatrix;
+                    
+                    if(MyAPIGateway.Input.IsNewKeyPressed(MyKeys.F))
+                    {
+                        if(l == null)
+                        {
+                            /*
+                            l = MyLights.AddLight();
+                            l.Start(MyLight.LightTypeEnum.PointLight, 5f);
+                            l.Color = Color.White;
+                            l.LightOn = true;
+                            l.CastShadows = true;
+                            l.ShadowDistance = 100f;
+                            l.Range = 2f;
+                            l.Intensity = 5f;
+                            l.ReflectorOn = true;
+                            l.ReflectorUp = matrix.Up;
+                            l.ReflectorDirection = matrix.Forward;
+                            l.UpdateReflectorRangeAndAngle(0.373f, 600f);
+                            l.ReflectorTexture = "Textures\\Lights\\dual_reflector_2.dds";
+                            l.ReflectorRange = 120f;
+                             */
+                            
+                            l = MyLights.AddLight();
+                            l.Start(MyLight.LightTypeEnum.Spotlight, 1.5f);
+                            l.CastShadows = true;
+                            l.ShadowDistance = 20f;
+                            l.ReflectorFalloff = 5f;
+                            l.LightOwner = MyLight.LightOwnerEnum.SmallShip;
+                            l.UseInForwardRender = true; // ???
+                            l.ReflectorTexture = "Textures\\Lights\\dual_reflector_2.dds";
+                            l.ReflectorColor = Color.White;
+                            l.ReflectorIntensity = 3f;
+                            l.ReflectorRange = 20f;
+                            l.ReflectorConeMaxAngleCos = 0.38f;
+                            //l.Color = Color.Red;
+                            //l.SpecularColor = Color.Blue;
+                            //l.Range = 2f;
+                            //l.Intensity = 5f;
+                            l.LightOn = true;
+                            l.ReflectorOn = true;
+                            
+                            l.GlossFactor = 0;
+                            l.ReflectorGlossFactor = 0;
+                        }
+                        else
+                        {
+                            l.LightOn = !l.LightOn;
+                            l.ReflectorOn = !l.ReflectorOn;
+                            //l.UpdateLight(); // uncomment to actually turn off the light
+                        }
+                        
+                        MyAPIGateway.Utilities.ShowNotification("light is "+(l.LightOn ? "on" : "off"), 3000, MyFontEnum.White);
+                    }
+                    
+                    if(l != null && l.LightOn)
+                    {
+                        /*
+                        l.Position = matrix.Translation + matrix.Forward * 1;
+                        l.ReflectorUp = matrix.Up;
+                        l.ReflectorDirection = matrix.Forward;
+                        l.UpdateLight();
+                         */
+                        
+                        //var angleMatrix = MatrixD.CreateFromAxisAngle(matrix.Backward, (double)MathHelper.ToRadians(-3.5f));
+                        l.ReflectorDirection = matrix.Forward; //Vector3.Transform(matrix.Forward, angleMatrix);
+                        l.ReflectorUp = matrix.Up;
+                        l.Position = matrix.Translation + matrix.Up * 0.1f;
+                        l.UpdateLight();
+                    }
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
             
