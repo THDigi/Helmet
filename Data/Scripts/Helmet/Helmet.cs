@@ -50,7 +50,7 @@ namespace Digi.Helmet
         private bool characterHasHelmet = true;
         private bool removedHelmet = false;
         private bool removedHUD = false;
-        private bool warningBlinkOn = true;
+        private bool warningBlinkOn = false;
         private double lastWarningBlink = 0;
         private long helmetBroken = 0;
         private bool prevHelmetOn = false;
@@ -81,6 +81,7 @@ namespace Digi.Helmet
 
         public class HudElementData
         {
+            public bool show = false;
             public int showIcon = 0;
             public float value = 0;
             public float prevValue = 0;
@@ -141,16 +142,15 @@ namespace Digi.Helmet
         private static readonly Color HUD_DARKGRAY = new Color((int)(64 * HUD_COLOR_SCALE), (int)(64 * HUD_COLOR_SCALE), (int)(64 * HUD_COLOR_SCALE));
         private const string HUD_TEXTURE = "SquareIgnoreDepth";
 
-        private static readonly Color ICON_COLOR_ON = new Color(255, 255, 255);
-        private static readonly Color ICON_COLOR_OFF = new Color(255, 0, 0);
-        private static readonly Color COLOR_FADE_ON = new Color(0, 255, 0);
-        private static readonly Color COLOR_FADE_OFF = new Color(255, 120, 0);
-
         private const float MARKER_SIZE = 0.0002f;
 
         private readonly List<IMyGps> hudGPSMarkers = new List<IMyGps>();
         private readonly Dictionary<IMyEntity, HelmetHudMarker> hudEntityMarkers = new Dictionary<IMyEntity, HelmetHudMarker>();
-        public readonly SortedList<float, string> selectedSort = new SortedList<float, string>();
+        public readonly SortedList<float, string> selectedSort = new SortedList<float, string>(new DuplicateKeyComparer<float>());
+        public static int hudMarkers = 0;
+        public static float hudMarkersFromDist = 0;
+
+        public const int MARKERS_MAX_SELECTED = 3;
 
         public struct HelmetHudMarker
         {
@@ -355,7 +355,51 @@ namespace Digi.Helmet
 
             try
             {
-                LogicUpdate();
+                if(drawHelmet)
+                    drawHelmet = false;
+
+                if(isDedicatedHost)
+                    return;
+
+                if(menuInChat > 0)
+                {
+                    if(menuInChat > 1)
+                        menuInChat--;
+                    else if(MyAPIGateway.Input.IsNewGameControlPressed(MyControlsSpace.CHAT_SCREEN) || MyAPIGateway.Input.IsNewKeyPressed(MyKeys.Escape))
+                        menuInChat = 0;
+                }
+
+                if(fatalError)
+                    return; // stop trying if a fatal error occurs
+
+                if(!init)
+                {
+                    if(MyAPIGateway.Session == null)
+                        return;
+
+                    Init();
+
+                    if(isDedicatedHost)
+                        return;
+                }
+
+                if(!settings.enabled)
+                {
+                    RemoveHelmet(true);
+                    return;
+                }
+
+                tick++; // global update tick
+                HelmetLogicReturn ret = UpdateHelmetLogic();
+
+                if(ret == HelmetLogicReturn.OK)
+                {
+                    drawHelmet = true;
+                }
+                else
+                {
+                    RemoveHelmet(ret == HelmetLogicReturn.REMOVE_ALL);
+                }
             }
             catch(Exception e)
             {
@@ -363,55 +407,6 @@ namespace Digi.Helmet
             }
 
             //bench_update.End();
-        }
-
-        private void LogicUpdate()
-        {
-            if(drawHelmet)
-                drawHelmet = false;
-
-            if(isDedicatedHost)
-                return;
-
-            if(menuInChat > 0)
-            {
-                if(menuInChat > 1)
-                    menuInChat--;
-                else if(MyAPIGateway.Input.IsNewGameControlPressed(MyControlsSpace.CHAT_SCREEN) || MyAPIGateway.Input.IsNewKeyPressed(MyKeys.Escape))
-                    menuInChat = 0;
-            }
-
-            if(fatalError)
-                return; // stop trying if a fatal error occurs
-
-            if(!init)
-            {
-                if(MyAPIGateway.Session == null)
-                    return;
-
-                Init();
-
-                if(isDedicatedHost)
-                    return;
-            }
-
-            if(!settings.enabled)
-            {
-                RemoveHelmet(true);
-                return;
-            }
-
-            tick++; // global update tick
-            HelmetLogicReturn ret = UpdateHelmetLogic();
-
-            if(ret == HelmetLogicReturn.OK)
-            {
-                drawHelmet = true;
-            }
-            else
-            {
-                RemoveHelmet(ret == HelmetLogicReturn.REMOVE_ALL);
-            }
         }
 
         private enum HelmetLogicReturn
@@ -806,7 +801,7 @@ namespace Digi.Helmet
                     animationStart = 0;
                 }
             }
-            
+
             if(removeHud && !removedHUD)
                 RemoveHud();
         }
@@ -817,7 +812,7 @@ namespace Digi.Helmet
                 return;
 
             removedHUD = true;
-            
+
             for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
             {
                 if(iconEntities[id] != null)
@@ -1476,6 +1471,7 @@ namespace Digi.Helmet
                     }
                 }
 
+                hudElementData[id].show = showIcon;
                 DrawIcon(headPos, id, showIcon);
             }
         }
@@ -1504,7 +1500,9 @@ namespace Digi.Helmet
                     {
                         if(!show)
                         {
-                            warningBlinkOn |= id == Icons.WARNING; // reset the blink status for the warning icon
+                            if(id == Icons.WARNING)
+                                warningBlinkOn = false; // reset the blink status for the warning icon
+
                             return;
                         }
 
@@ -1522,7 +1520,7 @@ namespace Digi.Helmet
                             case Icons.BROADCASTING:
                             case Icons.THRUSTERS:
                             case Icons.LIGHTS:
-                                var color = (elementData.value > 0 ? ICON_COLOR_ON : ICON_COLOR_OFF);
+                                var color = (elementData.value > 0 ? settings.statusIconOnColor : settings.statusIconOffColor);
                                 long fadeTime = TimeSpan.TicksPerMillisecond * 1000;
 
                                 if(elementData.lastChangedTime > 0)
@@ -1532,7 +1530,7 @@ namespace Digi.Helmet
                                     if(diff < fadeTime)
                                     {
                                         float fadePercent = (float)diff / (float)fadeTime;
-                                        color = Color.Lerp((elementData.value > 0 ? COLOR_FADE_ON : COLOR_FADE_OFF), (elementData.value > 0 ? ICON_COLOR_ON : ICON_COLOR_OFF), (fadePercent * fadePercent));
+                                        color = Color.Lerp((elementData.value > 0 ? settings.statusIconSetOnColor : settings.statusIconSetOffColor), color, (fadePercent * fadePercent));
                                     }
                                     else
                                         elementData.lastChangedTime = 0;
@@ -1549,7 +1547,7 @@ namespace Digi.Helmet
                                 }
                                 else
                                 {
-                                    warningBlinkOn = true; // reset the blink status for the warning icon
+                                    warningBlinkOn = false; // reset the blink status for the warning icon
                                 }
                                 break;
                         }
@@ -1570,7 +1568,7 @@ namespace Digi.Helmet
                 }
 
                 if(id == Icons.WARNING)
-                    warningBlinkOn = true; // reset the blink status for the warning icon
+                    warningBlinkOn = false; // reset the blink status for the warning icon
 
                 // remove the bar if it has one and it exists
                 if(elementSettings.hasBar && iconBarEntities[id] != null)
@@ -1594,9 +1592,9 @@ namespace Digi.Helmet
                 var cameraMatrix = MyAPIGateway.Session.Camera.WorldMatrix;
                 var posHUD = matrix.Translation + matrix.Forward * 0.1 + matrix.Backward * (HUDSCALE_DIST_ADJUST * (1.0 - settings.hudScale)); // remove the HUD scale from the position
                 var posRgid = cameraMatrix.Translation + cameraMatrix.Forward * 0.1;
-                var pos = Vector3D.Lerp(posRgid, posHUD, settings.crosshairSwayRatio);
-                
-                MyTransparentGeometry.AddBillboardOriented(settings.crosshairTypes[settings.crosshairType], settings.crosshairColor, pos, helmetMatrix.Up, helmetMatrix.Right, settings.crosshairScale / 100f, 0, true, -1, 0);
+                var pos = (animationStart > 0 ? posHUD : Vector3D.Lerp(posRgid, posHUD, settings.crosshairSwayRatio));
+
+                MyTransparentGeometry.AddBillboardOriented(settings.crosshairTypes[settings.crosshairType], settings.crosshairColor, pos, matrix.Up, matrix.Right, settings.crosshairScale / 100f, 0, true, -1, 0);
                 return;
             }
 
@@ -1802,8 +1800,8 @@ namespace Digi.Helmet
                         PrefabBuilder.CubeBlocks.Clear(); // need no leftovers from previous spawns
 
                         PrefabTextPanel.SubtypeName = "HelmetHUD_ghostLCD";
-                        PrefabTextPanel.FontColor = new Color(100, 180, 255);
-                        PrefabTextPanel.BackgroundColor = Color.Black;
+                        PrefabTextPanel.FontColor = settings.markerPopupFontColor;
+                        PrefabTextPanel.BackgroundColor = settings.markerPopupBGColor;
                         PrefabTextPanel.FontSize = 2;
 
                         PrefabBuilder.CubeBlocks.Add(PrefabTextPanel);
@@ -1830,18 +1828,20 @@ namespace Digi.Helmet
                         lcd.Render.RemoveRenderObjects();
                         lcd.Render.AddRenderObjects();
                         lcd.SetEmissiveParts("ScreenArea", Color.White, 1f);
-                        lcd.SetEmissiveParts("Edges", new Color(0, 55, 200), 0.5f);
+                        lcd.SetEmissiveParts("Edges", settings.markerPopupEdgeColor, 0.5f);
                     }
-
+                    
                     const double offset_forward = 0.1;
-                    const double offset_right = 0.045;
-                    const double offset_up = -0.01;
+                    double offset_right = settings.markerPopupOffset.X;
+                    double offset_up = settings.markerPopupOffset.Y;
 
                     var cameraMatrix = MyAPIGateway.Session.Camera.WorldMatrix;
                     cameraMatrix.Translation += cameraMatrix.Forward * offset_forward + cameraMatrix.Right * offset_right + cameraMatrix.Up * offset_up;
                     matrix.Translation += matrix.Forward * offset_forward + matrix.Right * offset_right + matrix.Up * offset_up;
                     matrix.Translation += matrix.Backward * (HUDSCALE_DIST_ADJUST * (1.0 - settings.hudScale)); // remove the HUD scale from the position
                     matrix.Translation = Vector3D.Lerp(cameraMatrix.Translation, matrix.Translation, settings.crosshairSwayRatio);
+
+                    MatrixD.Rescale(ref matrix, settings.markerPopupScale);
 
                     ghostLCD.SetWorldMatrix(matrix);
                     ghostLCD.Visible = true;
@@ -2005,14 +2005,6 @@ namespace Digi.Helmet
                     return;
             }
 
-            // blink the warning icon by moving it out of view and back in view instead of reallocating memory by deleting/readding it
-            if(id == Icons.WARNING && !warningBlinkOn)
-            {
-                matrix.Translation += (matrix.Backward * 10);
-                iconEntities[id].SetWorldMatrix(matrix);
-                return;
-            }
-
             // more curvature for the display
             if(id == Icons.DISPLAY)
                 headPos += matrix.Forward * 0.23;
@@ -2061,16 +2053,15 @@ namespace Digi.Helmet
                 return;
             }
 
-            if(warningBlinkOn && elementData.value <= elementSettings.warnPercent)
+            // if warning icon is shown and the blink state is on and this bar is below the warning percent then add a red background
+            if(warningBlinkOn && elementData.value <= elementSettings.warnPercent && hudElementData[Icons.WARNING].show)
             {
-                // add a background on each warned element
-                var pos = matrix.Translation + (settings.elements[id].flipHorizontal ? matrix.Right : matrix.Left) * 0.00325;
-                MyTransparentGeometry.AddBillboardOriented("HelmetHUDBackground_Warning", new Color(255, 0, 0) * 0.25f, pos, matrix.Down, matrix.Left, 0.004f, 0.016f);
+                // TODO > Issue: this glitches out by moving around...
+                //var pos = matrix.Translation + (settings.elements[id].flipHorizontal ? matrix.Right : matrix.Left) * 0.00325;
+                //MyTransparentGeometry.AddBillboardOriented("HelmetHUDBackground_Warning", new Color(255, 0, 0) * 0.25f, pos, matrix.Down, matrix.Left, 0.004f, 0.016f);
 
-                // older code which made the bar blink
-                //matrix.Translation += (matrix.Backward * 10);
-                //iconBarEntities[id].SetWorldMatrix(matrix);
-                //return;
+                iconBarEntities[id].Visible = false;
+                return;
             }
 
             // calculate the bar size
@@ -2081,6 +2072,7 @@ namespace Digi.Helmet
             matrix.M12 *= scale;
             matrix.M13 *= scale;
 
+            iconBarEntities[id].Visible = true;
             iconBarEntities[id].SetWorldMatrix(matrix);
         }
 
@@ -3589,10 +3581,20 @@ namespace Digi.Helmet
                 if(selected.Count > 0)
                 {
                     str.Clear();
+                    var values = selected.Values;
+                    int i = 0;
 
-                    foreach(var s in selected.Values)
+                    foreach(var kv in selected)
                     {
-                        str.AppendLine(s);
+                        if(++i > Helmet.MARKERS_MAX_SELECTED)
+                        {
+                            str.Append(" + ").Append(values.Count - Helmet.MARKERS_MAX_SELECTED).Append(" more beyond ");
+                            MyValueFormatter.AppendDistanceInBestUnit(kv.Key, str);
+                            str.Append("...");
+                            break;
+                        }
+
+                        str.AppendLine(kv.Value);
                     }
 
                     selected.Clear();
@@ -3738,6 +3740,26 @@ namespace Digi.Helmet
         public static StringBuilder AppendRGBA(this StringBuilder str, Color color)
         {
             return str.Append(color.R).Append(", ").Append(color.G).Append(", ").Append(color.B).Append(", ").Append(color.A);
+        }
+
+        public static StringBuilder AppendRGB(this StringBuilder str, Color color)
+        {
+            return str.Append(color.R).Append(", ").Append(color.G).Append(", ").Append(color.B);
+        }
+    }
+
+    // Got from: http://stackoverflow.com/questions/5716423/c-sharp-sortable-collection-which-allows-duplicate-keys
+    /// <summary>
+    /// Comparer for comparing two keys, handling equality as beeing greater
+    /// Use this Comparer e.g. with SortedLists or SortedDictionaries, that don't allow duplicate keys
+    /// </summary>
+    /// <typeparam name="TKey"></typeparam>
+    public class DuplicateKeyComparer<TKey> : IComparer<TKey> where TKey : IComparable
+    {
+        public int Compare(TKey x, TKey y)
+        {
+            int result = x.CompareTo(y);
+            return (result == 0 ? 1 : result);
         }
     }
 }

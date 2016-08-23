@@ -96,7 +96,11 @@ namespace Digi.Helmet
         public float warnBlinkTime = 0.25f;
         public float delayedRotation = 0.5f;
         public bool toggleHelmetInCockpit = false;
-
+        public Color statusIconOnColor = new Color(255, 255, 255);
+        public Color statusIconSetOnColor = new Color(0, 255, 0);
+        public Color statusIconOffColor = new Color(255, 0, 0);
+        public Color statusIconSetOffColor = new Color(255, 120, 0);
+        
         // TODO feature: lights
         //public byte lightReplace = 1;
         //public byte lightBeams = 2;
@@ -118,6 +122,11 @@ namespace Digi.Helmet
         public Color markerColorEnemy = Color.Red;
         public Color markerColorNeutral = Color.White;
         public Color markerColorBlock = Color.Yellow;
+        public Vector2 markerPopupOffset = new Vector2(0.045f, -0.01f);
+        public float markerPopupScale = 1f;
+        public Color markerPopupFontColor = new Color(100, 180, 255);
+        public Color markerPopupBGColor = Color.Black;
+        public Color markerPopupEdgeColor = new Color(0, 55, 200);
 
         public int displayUpdateRate = 20;
         public int displayQuality = 1;
@@ -219,13 +228,13 @@ namespace Digi.Helmet
             {
                 string line;
                 string[] args;
+                string[] split;
                 int i;
                 bool b;
                 float f;
                 double d;
                 SpeedUnits u;
                 HUDQualityEnum q;
-                string[] rgb;
                 byte red, green, blue, alpha;
                 bool lookForIndentation = false;
                 int currentId = -1;
@@ -293,8 +302,8 @@ namespace Digi.Helmet
                                     }
                                     else
                                     {
-                                        rgb = args[1].Split(',');
-                                        if(rgb.Length >= 3 && byte.TryParse(rgb[0].Trim(), out red) && byte.TryParse(rgb[1].Trim(), out green) && byte.TryParse(rgb[2].Trim(), out blue))
+                                        split = args[1].Split(',');
+                                        if(split.Length >= 3 && byte.TryParse(split[0].Trim(), out red) && byte.TryParse(split[1].Trim(), out green) && byte.TryParse(split[2].Trim(), out blue))
                                         {
                                             switch(args[0])
                                             {
@@ -327,8 +336,8 @@ namespace Digi.Helmet
                                         Log.Error("Invalid " + args[0] + " value: " + args[1]);
                                     continue;
                                 case "color":
-                                    rgb = args[1].Split(',');
-                                    if(rgb.Length >= 4 && byte.TryParse(rgb[0].Trim(), out red) && byte.TryParse(rgb[1].Trim(), out green) && byte.TryParse(rgb[2].Trim(), out blue) && byte.TryParse(rgb[3].Trim(), out alpha))
+                                    split = args[1].Split(',');
+                                    if(split.Length >= 4 && byte.TryParse(split[0].Trim(), out red) && byte.TryParse(split[1].Trim(), out green) && byte.TryParse(split[2].Trim(), out blue) && byte.TryParse(split[3].Trim(), out alpha))
                                         crosshairColor = new Color(red, green, blue, alpha);
                                     else
                                         Log.Error("Invalid " + args[0] + " value: " + args[1]);
@@ -388,8 +397,8 @@ namespace Digi.Helmet
                                 case "colorenemy":
                                 case "colorneutral":
                                 case "colorblock":
-                                    rgb = args[1].Split(',');
-                                    if(rgb.Length >= 4 && byte.TryParse(rgb[0].Trim(), out red) && byte.TryParse(rgb[1].Trim(), out green) && byte.TryParse(rgb[2].Trim(), out blue) && byte.TryParse(rgb[3].Trim(), out alpha))
+                                    split = args[1].Split(',');
+                                    if(split.Length >= 4 && byte.TryParse(split[0].Trim(), out red) && byte.TryParse(split[1].Trim(), out green) && byte.TryParse(split[2].Trim(), out blue) && byte.TryParse(split[3].Trim(), out alpha))
                                     {
                                         var c = new Color(red, green, blue, alpha);
                                         switch(args[0])
@@ -402,6 +411,37 @@ namespace Digi.Helmet
                                             case "colorblock": markerColorBlock = c; break;
                                         }
                                     }
+                                    else
+                                        Log.Error("Invalid " + args[0] + " value: " + args[1]);
+                                    continue;
+                                case "popupfontcolor":
+                                case "popupbgcolor":
+                                case "popupedgecolor":
+                                    split = args[1].Split(',');
+                                    if(split.Length >= 3 && byte.TryParse(split[0].Trim(), out red) && byte.TryParse(split[1].Trim(), out green) && byte.TryParse(split[2].Trim(), out blue))
+                                    {
+                                        var c = new Color(red, green, blue);
+                                        switch(args[0])
+                                        {
+                                            case "popupfontcolor": markerPopupFontColor = c; break;
+                                            case "popupbgcolor": markerPopupBGColor = c; break;
+                                            case "popupedgecolor": markerPopupEdgeColor = c; break;
+                                        }
+                                    }
+                                    else
+                                        Log.Error("Invalid " + args[0] + " value: " + args[1]);
+                                    continue;
+                                case "popupoffset":
+                                    split = args[1].Split(',');
+                                    float f2;
+                                    if(split.Length >= 2 && float.TryParse(split[0], out f) && float.TryParse(split[1], out f2))
+                                        markerPopupOffset = new Vector2(f, f2);
+                                    else
+                                        Log.Error("Invalid " + args[0] + " value: " + args[1]);
+                                    continue;
+                                case "popupscale":
+                                    if(float.TryParse(args[1], out f))
+                                        markerPopupScale = MathHelper.Clamp(f, 0.01f, 5f);
                                     else
                                         Log.Error("Invalid " + args[0] + " value: " + args[1]);
                                     continue;
@@ -640,19 +680,27 @@ namespace Digi.Helmet
                 str.AppendLine("// Lines starting with // are comments");
                 str.AppendLine();
             }
-
+            
             str.Append("Enabled=").Append(boolToLower(enabled)).AppendLine(comments ? " // toggles the entire mod, default: true" : "");
             str.Append("HUD=").Append(boolToLower(hud)).AppendLine(comments ? " // toggles the HUD, default: true" : "");
             str.Append("HUDQuality=").Append(hudQuality).AppendLine(comments ? " // controls the quality of certain HUD elements, currently affects the vector indicator. Values: verylow, low, medum, high, ultra, default: high. Ultra is not noticeable comapred to high on 1080p" : "");
             str.Append("HUDAlways=").Append(boolToLower(hudAlways)).AppendLine(comments ? " // if set to true, all HUD elements will be shown even if the helmet is off (set to 3) with the exception of disabled elements (the ones set to 0), default: false" : "");
             str.Append("GlassReflections=").Append(boolToLower(glassReflections)).AppendLine(comments ? " // toggles the reflections on the helmet, default: true" : "");
-            str.Append("AnimateTime=").Append(animateTime).AppendLine(comments ? " // helmet animation time in seconds, 0 to disable, default: 0.3" : "");
-            str.Append("AutoFOVScale=").Append(boolToLower(autoFovScale)).AppendLine(comments ? " // if true it automatically sets 'scale' and 'hudscale' when changing FOV" : "");
-            str.Append("Scale=").Append(scale).AppendLine(comments ? " // the helmet glass scale, -1.0 to 1.0, default 0 for FOV 60" : "");
-            str.Append("HudScale=").Append(hudScale).AppendLine(comments ? " // the entire HUD scale, -1.0 to 1.0, default 0 for FOV 60" : "");
-            str.Append("WarnBlinkTime=").Append(warnBlinkTime).AppendLine(comments ? " // the time between each hide/show of the warning icon and its respective bar" : "");
-            str.Append("DelayedRotation=").Append(delayedRotation).AppendLine(comments ? " // 0.0 to 1.0, how much to delay the helmet when rotating view, 0 disables it" : "");
+            str.Append("DelayedRotation=").Append(delayedRotation).AppendLine(comments ? " // 0.0 to 1.0, how much to delay the helmet when rotating view where 1 is fully smoothed, 0 disables it, default: 0.5" : "");
+            str.Append("AnimateTime=").Append(animateTime).AppendLine(comments ? " // helmet on/off animation time in seconds, 0 to disable animation and instantly show/hide the helmet/HUD, default: 0.3" : "");
+            str.Append("AutoFOVScale=").Append(boolToLower(autoFovScale)).AppendLine(comments ? " // if true it automatically sets 'scale' and 'hudscale' when changing FOV in-game, default: false" : "");
+            str.Append("Scale=").Append(scale).AppendLine(comments ? " // the helmet glass scale, -1.0 to 1.0, default is auto-set depending on your FOV when first running." : "");
+            str.Append("HUDScale=").Append(hudScale).AppendLine(comments ? " // the entire HUD scale, -1.0 to 1.0, default is auto-set depending on your FOV when first running." : "");
             str.Append("ToggleHelmetInCockpit=").Append(boolToLower(toggleHelmetInCockpit)).AppendLine(comments ? " // enable toggling helmet inside a cockpit. WARNING: the key monitoring still works while in menus so be aware of that before enabling this. Default: false" : "");
+            str.Append("WarnBlinkTime=").Append(warnBlinkTime).AppendLine(comments ? " // the time between each hide/show of the warning icon and its respective bar" : "");
+
+            if(comments)
+                str.AppendLine();
+
+            str.Append("StatusIconOnColor=").AppendRGBA(statusIconOnColor).AppendLine(comments ? " // Color of the status icons (jetpack, lights, etc) when on, in RGBA format. Default: 255, 255, 255, 255" : "");
+            str.Append("StatusIconSetOnColor=").AppendRGBA(statusIconSetOnColor).AppendLine(comments ? " // Color of the status icons when just turned on, after which it fades to the on color (the one above). Default: 0, 255, 0, 255" : "");
+            str.Append("StatusIconOffColor=").AppendRGBA(statusIconOffColor).AppendLine(comments ? " // Color of the status icons when off. Default: 255, 0, 0, 255" : "");
+            str.Append("StatusIconSetOffColor=").AppendRGBA(statusIconSetOffColor).AppendLine(comments ? " // Color of the status icons when just turned off, after which it fades to the off color (the one above). Default: 255, 120, 0, 255" : "");
 
             // TODO feature: lights
             //if(comments)
@@ -706,18 +754,23 @@ namespace Digi.Helmet
                         str.Append("  ColorEnemy=").AppendRGBA(markerColorEnemy).AppendLine(comments ? " // the color of the enemy signals in RGBA format, default: 255, 0, 0, 255" : "");
                         str.Append("  ColorNeutral=").AppendRGBA(markerColorNeutral).AppendLine(comments ? " // the color of the neutral signals in RGBA format, default: 255, 255, 255, 255" : "");
                         str.Append("  ColorBlock=").AppendRGBA(markerColorBlock).AppendLine(comments ? " // the color of block signals in RGBA format, default: 255, 255, 0, 255" : "");
+                        str.Append("  PopupFontColor=").AppendRGB(markerPopupFontColor).AppendLine(comments ? " // marker info popup's font color, default: 100, 180, 255" : "");
+                        str.Append("  PopupBGColor=").AppendRGB(markerPopupBGColor).AppendLine(comments ? " // marker info popup's background color, default: 0, 0, 0" : "");
+                        str.Append("  PopupEdgeColor=").AppendRGB(markerPopupEdgeColor).AppendLine(comments ? " // marker info popup's background edge color, default: 0, 55, 200" : "");
+                        str.Append("  PopupOffset=").Append(markerPopupOffset.X).Append(", ").Append(markerPopupOffset.Y).AppendLine(comments ? " // the offset of the popup relative to the crosshair, default: 0.045, -0.01" : "");
+                        str.Append("  PopupScale=").Append(Math.Round(markerPopupScale, 5)).AppendLine(comments ? " // the scale of the marker info popup, default: 1.0" : "");
                     }
 
                     if(id == Icons.DISPLAY)
                     {
                         str.Append("  Updaterate=").Append(displayUpdateRate).AppendLine(comments ? " // updates per second, 1 to 60 (depends on simulation speed), default 20" : "");
                         str.Append("  Quality=").Append(displayQuality).AppendLine(comments ? " // texture size and model detail, default 1 (512x512 with details), set to 0 for 256x256 without model details" : "");
-                        str.Append("  Fontcolor=").Append(displayFontColor.R).Append(",").Append(displayFontColor.G).Append(",").Append(displayFontColor.B).AppendLine(comments ? " // text color in R,G,B format, default 151,226,255" : "");
-                        str.Append("  BGColor=").Append(displayBgColor.R).Append(",").Append(displayBgColor.G).Append(",").Append(displayBgColor.B).AppendLine(comments ? " // background color in R,G,B format, default 1,2,3" : "");
+                        str.Append("  FontColor=").AppendRGB(displayFontColor).AppendLine(comments ? " // text color in R,G,B format, default 151,226,255" : "");
+                        str.Append("  BGColor=").AppendRGB(displayBgColor).AppendLine(comments ? " // background color in R,G,B format, default 1,2,3" : "");
 
                         str.Append("  BorderColor=");
                         if(displayBorderColor.HasValue)
-                            str.Append(displayBorderColor.Value.R).Append(",").Append(displayBorderColor.Value.G).Append(",").Append(displayBorderColor.Value.B);
+                            str.AppendRGB(displayBorderColor.Value);
                         else
                             str.Append("suit");
                         str.AppendLine(comments ? " // LCD frame color in R,G,B format or \"suit\" to use the suit's color, default: suit" : "");
