@@ -248,6 +248,8 @@ namespace Digi.Helmet
                 //var mods = MyAPIGateway.Session.GetCheckpoint("null").Mods;
                 //bool found = false;
                 //
+                // TODO just hardcode the folder name to avoid GetCheckpoint()!
+                //
                 //foreach(var mod in mods)
                 //{
                 //    if(mod.PublishedFileId == 0 ? mod.Name == MOD_DEV_NAME : (mod.PublishedFileId == Log.WORKSHOP_ID || mod.PublishedFileId == WORKSHOP_DEV_ID))
@@ -508,13 +510,10 @@ namespace Digi.Helmet
             if(helmetOn)
             {
                 // Spawn the helmet model if it's not spawned
-                //if(brokenHelmet || (helmet == null && settings.helmetModel != null)) // UNDONE
-                if(helmet == null)
+                if(brokenHelmet || (helmet == null && settings.helmetModel != null))
                 {
-                    //helmet = SpawnPrefab(CUBE_HELMET_PREFIX + (brokenHelmet ? CUBE_HELMET_BROKEN_SUFFIX : settings.GetHelmetModel())); // UNDONE
-
-                    helmet = SpawnPrefab("Helmet_vignette");
-
+                    helmet = SpawnPrefab(CUBE_HELMET_PREFIX + (brokenHelmet ? CUBE_HELMET_BROKEN_SUFFIX : settings.GetHelmetModel()));
+                    
                     if(helmet == null)
                     {
                         Log.Error("Couldn't load the helmet prefab!");
@@ -1830,7 +1829,7 @@ namespace Digi.Helmet
                         lcd.SetEmissiveParts("ScreenArea", Color.White, 1f);
                         lcd.SetEmissiveParts("Edges", settings.markerPopupEdgeColor, 0.5f);
                     }
-                    
+
                     const double offset_forward = 0.1;
                     double offset_right = settings.markerPopupOffset.X;
                     double offset_up = settings.markerPopupOffset.Y;
@@ -2165,6 +2164,11 @@ namespace Digi.Helmet
 
                     PrefabBuilder.CubeBlocks.Add(PrefabTextPanel);
                     PrefabBuilder.CubeBlocks.Add(PrefabBattery);
+
+                    var def = MyDefinitionManager.Static.GetCubeBlockDefinition(new MyDefinitionId(typeof(MyObjectBuilder_TextPanel), name)) as MyTextPanelDefinition;
+
+                    if(def != null)
+                        def.TextureResolution = settings.displayResolution;
                 }
                 else
                 {
@@ -2444,7 +2448,7 @@ namespace Digi.Helmet
 
                     settings.Save();
 
-                    RemoveHelmet();
+                    RemoveHelmet(removeHud: true);
 
                     // TODO feature: lights
                     //UpdateLight(0, remove: true);
@@ -2749,7 +2753,7 @@ namespace Digi.Helmet
                         }
                         else
                         {
-                            float power = characterEntity.SuitEnergyLevel;
+                            float power = characterEntity.SuitEnergyLevel * 100;
                             float o2 = characterEntity.GetSuitGasFillLevel(DEFID_OXYGEN) * 100;
                             float h = characterEntity.GetSuitGasFillLevel(DEFID_HYDROGEN) * 100;
                             long now = DateTime.UtcNow.Ticks;

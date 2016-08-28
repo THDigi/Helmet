@@ -130,6 +130,7 @@ namespace Digi.Helmet
 
         public int displayUpdateRate = 20;
         public int displayQuality = 1;
+        public int displayResolution = 512;
         public Color displayFontColor = new Color(151, 226, 255);
         public Color displayBgColor = new Color(1, 2, 3);
         public Color? displayBorderColor = null;
@@ -284,6 +285,12 @@ namespace Digi.Helmet
                                 case "quality":
                                     if(int.TryParse(args[1], out i))
                                         displayQuality = MathHelper.Clamp(i, 0, 1);
+                                    else
+                                        Log.Error("Invalid " + args[0] + " value: " + args[1]);
+                                    continue;
+                                case "resolution":
+                                    if(int.TryParse(args[1], out i))
+                                        displayResolution = MathHelper.Clamp(i, 128, 4096);
                                     else
                                         Log.Error("Invalid " + args[0] + " value: " + args[1]);
                                     continue;
@@ -764,7 +771,8 @@ namespace Digi.Helmet
                     if(id == Icons.DISPLAY)
                     {
                         str.Append("  Updaterate=").Append(displayUpdateRate).AppendLine(comments ? " // updates per second, 1 to 60 (depends on simulation speed), default 20" : "");
-                        str.Append("  Quality=").Append(displayQuality).AppendLine(comments ? " // texture size and model detail, default 1 (512x512 with details), set to 0 for 256x256 without model details" : "");
+                        str.Append("  Quality=").Append(displayQuality).AppendLine(comments ? " // model detail, default 1 (normal), set to 0 for low quality." : "");
+                        str.Append("  Resolution=").Append(displayResolution).AppendLine(comments ? " // screen texture width and height in pixels, default: 512, valid range: 128 to 4096" : "");
                         str.Append("  FontColor=").AppendRGB(displayFontColor).AppendLine(comments ? " // text color in R,G,B format, default 151,226,255" : "");
                         str.Append("  BGColor=").AppendRGB(displayBgColor).AppendLine(comments ? " // background color in R,G,B format, default 1,2,3" : "");
 
