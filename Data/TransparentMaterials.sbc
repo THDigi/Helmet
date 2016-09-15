@@ -375,28 +375,5 @@
 		</UVSize>
 	</TransparentMaterial>
 
-	<TransparentMaterial>
-		<Id>
-			<TypeId>TransparentMaterialDefinition</TypeId>
-			<SubtypeId>LightBeamPart</SubtypeId>
-		</Id>
-		<AlphaMistingEnable>true</AlphaMistingEnable>
-		<AlphaSaturation>0</AlphaSaturation>
-		<CanBeAffectedByOtherLights>false</CanBeAffectedByOtherLights>
-		<Emissivity>0</Emissivity>
-		<IgnoreDepth>true</IgnoreDepth>
-		<SoftParticleDistanceScale>1</SoftParticleDistanceScale>
-		<Texture>Textures\LightBeamPart.dds</Texture>
-		<UseAtlas>false</UseAtlas>
-		<UVOffset>
-			<X>0</X>
-			<Y>0</Y>
-		</UVOffset>
-		<UVSize>
-			<X>1</X>
-			<Y>1</Y>
-		</UVSize>
-	</TransparentMaterial>
-
 </TransparentMaterials>
 </Definitions>

@@ -27,6 +27,8 @@ using Sandbox.ModAPI.Interfaces; // needed for TerminalPropertyExtensions
 using Digi.Utils;
 
 using IMyControllableEntity = Sandbox.Game.Entities.IMyControllableEntity;
+using Sandbox.Game.Entities.Character.Components;
+using VRage.Library.Utils;
 
 namespace Digi.Helmet
 {
@@ -60,7 +62,14 @@ namespace Digi.Helmet
         private bool inCockpit = false;
         private bool markerBlinkMemory = false;
 
+#if STABLE // TODO STABLE CONDITION
         public readonly static Dictionary<long, IMyGravityGeneratorBase> gravityGenerators = new Dictionary<long, IMyGravityGeneratorBase>();
+#else
+        public readonly static Dictionary<long, IMyGravityProvider> gravityGenerators = new Dictionary<long, IMyGravityProvider>();
+#endif
+
+        public const float G_ACCELERATION = 9.81f;
+
         private Vector3 artificialDir = Vector3.Zero;
         private Vector3 naturalDir = Vector3.Zero;
         private Vector3 gravityDir = Vector3.Zero;
@@ -513,7 +522,7 @@ namespace Digi.Helmet
                 if(brokenHelmet || (helmet == null && settings.helmetModel != null))
                 {
                     helmet = SpawnPrefab(CUBE_HELMET_PREFIX + (brokenHelmet ? CUBE_HELMET_BROKEN_SUFFIX : settings.GetHelmetModel()));
-                    
+
                     if(helmet == null)
                     {
                         Log.Error("Couldn't load the helmet prefab!");
@@ -2255,7 +2264,7 @@ namespace Digi.Helmet
             gravityForce = 0;
             artificialForce = 0;
             naturalForce = 0;
-            altitude = 0;
+            altitude = float.MaxValue;
 
             foreach(var kv in planets)
             {
@@ -2269,44 +2278,63 @@ namespace Digi.Helmet
 
                 if(dir.LengthSquared() <= gravComp.GravityLimitSq)
                 {
-                    altitude = (float)Vector3D.Distance(point, planet.GetClosestSurfacePointGlobal(ref point));
+                    altitude = Math.Min((float)Vector3D.Distance(point, planet.GetClosestSurfacePointGlobal(ref point)), altitude);
                     dir.Normalize();
                     naturalDir += dir * gravComp.GetGravityMultiplier(point);
                 }
             }
 
+            if(altitude >= float.MaxValue - 1)
+                altitude = 0;
+
             naturalForce = naturalDir.Length();
 
             foreach(var generator in gravityGenerators.Values)
             {
-                if(generator.IsWorking)
+                if(!generator.IsWorking)
+                    continue;
+
+                var flat = generator as IMyGravityGenerator;
+
+#if STABLE // TODO STABLE CONDITION
+                if(flat != null)
                 {
-                    var flat = generator as IMyGravityGenerator;
+                    var box = new MyOrientedBoundingBoxD(flat.WorldMatrix.Translation, new Vector3(flat.FieldWidth / 2, flat.FieldHeight / 2, flat.FieldDepth / 2), Quaternion.CreateFromRotationMatrix(flat.WorldMatrix));
 
-                    if(flat != null)
-                    {
-                        var halfExtents = new Vector3(flat.FieldWidth / 2, flat.FieldHeight / 2, flat.FieldDepth / 2);
-                        var box = new MyOrientedBoundingBoxD(flat.WorldMatrix.Translation, halfExtents, Quaternion.CreateFromRotationMatrix(flat.WorldMatrix));
+                    if(box.Contains(ref point))
+                        artificialDir += flat.WorldMatrix.Down * flat.Gravity;
 
-                        if(box.Contains(ref point))
-                        {
-                            artificialDir += flat.WorldMatrix.Down * flat.Gravity;
-                        }
-
-                        continue;
-                    }
-
-                    var sphere = generator as IMyGravityGeneratorSphere;
-
-                    if(sphere != null && Vector3D.DistanceSquared(generator.WorldMatrix.Translation, point) <= (sphere.Radius * sphere.Radius))
-                    {
-                        var dir = generator.WorldMatrix.Translation - point;
-                        dir.Normalize();
-                        artificialDir += (Vector3)dir * (sphere.Gravity / 9.81f); // HACK remove division once gravity value is fixed
-
-                        continue;
-                    }
+                    continue;
                 }
+
+                var sphere = generator as IMyGravityGeneratorSphere;
+
+                if(sphere != null && Vector3D.DistanceSquared(sphere.WorldMatrix.Translation, point) <= (sphere.Radius * sphere.Radius))
+                {
+                    var dir = sphere.WorldMatrix.Translation - point;
+                    dir.Normalize();
+                    artificialDir += dir * (sphere.Gravity / G_ACCELERATION);
+                }
+#else
+                if(flat != null)
+                {
+                    var box = new MyOrientedBoundingBoxD(flat.WorldMatrix.Translation, flat.FieldSize / 2, Quaternion.CreateFromRotationMatrix(flat.WorldMatrix));
+
+                    if(box.Contains(ref point))
+                        artificialDir += flat.WorldMatrix.Down * (flat.GravityAcceleration / G_ACCELERATION);
+
+                    continue;
+                }
+
+                var sphere = generator as IMyGravityGeneratorSphere;
+
+                if(sphere != null && Vector3D.DistanceSquared(sphere.WorldMatrix.Translation, point) <= (sphere.Radius * sphere.Radius))
+                {
+                    var dir = sphere.WorldMatrix.Translation - point;
+                    dir.Normalize();
+                    artificialDir += dir * (flat.GravityAcceleration / G_ACCELERATION);
+                }
+#endif // STABLE
             }
 
             float mul = MathHelper.Clamp(1f - naturalForce * 2f, 0f, 1f);
@@ -2861,65 +2889,66 @@ namespace Digi.Helmet
 
                     if(cubeBuilder || buildTool)
                     {
-                        // FIXME whitelist screwed this up
-                        //var b = MyHud.BlockInfo;
-                        //
-                        //if(!string.IsNullOrEmpty(b.BlockName))
-                        //{
-                        //    int hp = (int)Math.Floor(b.BlockIntegrity * 100);
-                        //    int crit = (int)Math.Floor(b.CriticalIntegrity * 100);
-                        //    int own = (int)Math.Floor(b.OwnershipIntegrity * 100);
-                        //
-                        //    if(!cubeBuilder && hp == 0 && crit == 0 && own == 0)
-                        //    {
-                        //        str.Append("Waiting for selection...").AppendLine();
-                        //    }
-                        //    else
-                        //    {
-                        //        str.Append(b.BlockName).AppendLine();
-                        //
-                        //        if(!cubeBuilder)
-                        //            str.Append("Integrity: ").Append(hp).Append("% (").Append(crit).Append("% / ").Append(own).Append("%)").AppendLine();
-                        //
-                        //        components.Clear();
-                        //
-                        //        foreach(var comp in b.Components)
-                        //        {
-                        //            if(comp.TotalCount > comp.InstalledCount)
-                        //            {
-                        //                if(components.ContainsKey(comp.DefinitionId.SubtypeName))
-                        //                    components[comp.DefinitionId.SubtypeName] += (comp.TotalCount - comp.InstalledCount);
-                        //                else
-                        //                    components.Add(comp.DefinitionId.SubtypeName, (comp.TotalCount - comp.InstalledCount));
-                        //            }
-                        //        }
-                        //
-                        //        int componentsCount = components.Count;
-                        //
-                        //        if(componentsCount > 0)
-                        //        {
-                        //            int max = (cubeBuilder ? 4 : 3);
-                        //            int line = 0;
-                        //
-                        //            foreach(var comp in components)
-                        //            {
-                        //                str.Append("  ").Append(comp.Value).Append("x ").Append(comp.Key).AppendLine();
-                        //
-                        //                if(++line >= max)
-                        //                    break;
-                        //            }
-                        //
-                        //            if(componentsCount > max)
-                        //                str.Append(" +").Append(componentsCount - 3).Append(" other...").AppendLine();
-                        //
-                        //            components.Clear();
-                        //        }
-                        //    }
-                        //}
-                        //else
-                        //{
-                        //    str.Append("Waiting for selection...").AppendLine();
-                        //}
+#if !STABLE // TODO STABLE CONDITION
+                        var b = Sandbox.Game.Gui.MyHud.BlockInfo;
+
+                        if(!string.IsNullOrEmpty(b.BlockName))
+                        {
+                            int hp = (int)Math.Floor(b.BlockIntegrity * 100);
+                            int crit = (int)Math.Floor(b.CriticalIntegrity * 100);
+                            int own = (int)Math.Floor(b.OwnershipIntegrity * 100);
+
+                            if(!cubeBuilder && hp == 0 && crit == 0 && own == 0)
+                            {
+                                str.Append("Waiting for selection...").AppendLine();
+                            }
+                            else
+                            {
+                                str.Append(b.BlockName).AppendLine();
+
+                                if(!cubeBuilder)
+                                    str.Append("Integrity: ").Append(hp).Append("% (").Append(crit).Append("% / ").Append(own).Append("%)").AppendLine();
+
+                                components.Clear();
+
+                                foreach(var comp in b.Components)
+                                {
+                                    if(comp.TotalCount > comp.InstalledCount)
+                                    {
+                                        if(components.ContainsKey(comp.DefinitionId.SubtypeName))
+                                            components[comp.DefinitionId.SubtypeName] += (comp.TotalCount - comp.InstalledCount);
+                                        else
+                                            components.Add(comp.DefinitionId.SubtypeName, (comp.TotalCount - comp.InstalledCount));
+                                    }
+                                }
+
+                                int componentsCount = components.Count;
+
+                                if(componentsCount > 0)
+                                {
+                                    int max = (cubeBuilder ? 4 : 3);
+                                    int line = 0;
+
+                                    foreach(var comp in components)
+                                    {
+                                        str.Append("  ").Append(comp.Value).Append("x ").Append(comp.Key).AppendLine();
+
+                                        if(++line >= max)
+                                            break;
+                                    }
+
+                                    if(componentsCount > max)
+                                        str.Append(" +").Append(componentsCount - 3).Append(" other...").AppendLine();
+
+                                    components.Clear();
+                                }
+                            }
+                        }
+                        else
+                        {
+                            str.Append("Waiting for selection...").AppendLine();
+                        }
+#endif
                     }
                     else if(handDrill)
                     {
