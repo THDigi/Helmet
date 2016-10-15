@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
@@ -8,27 +7,25 @@ using Sandbox.Game;
 using Sandbox.Game.Entities;
 using Sandbox.Game.EntityComponents;
 using Sandbox.Game.Lights;
+using Sandbox.Game.Weapons;
 using Sandbox.ModAPI;
+using Sandbox.ModAPI.Interfaces; // needed for TerminalPropertyExtensions
 using SpaceEngineers.Game.ModAPI;
+using VRage;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
-using VRage.Game.ModAPI.Interfaces;
 using VRage.Game.ObjectBuilders.Definitions;
 using VRage.Input;
-using VRageMath;
-using VRage;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRage.Utils;
-using Sandbox.ModAPI.Interfaces; // needed for TerminalPropertyExtensions
+using VRageMath;
 
 using Digi.Utils;
 
 using IMyControllableEntity = Sandbox.Game.Entities.IMyControllableEntity;
-using Sandbox.Game.Entities.Character.Components;
-using VRage.Library.Utils;
 
 namespace Digi.Helmet
 {
@@ -61,12 +58,8 @@ namespace Digi.Helmet
         private bool helmetOn = false;
         private bool inCockpit = false;
         private bool markerBlinkMemory = false;
-
-#if STABLE // TODO STABLE CONDITION
-        public readonly static Dictionary<long, IMyGravityGeneratorBase> gravityGenerators = new Dictionary<long, IMyGravityGeneratorBase>();
-#else
+        
         public readonly static Dictionary<long, IMyGravityProvider> gravityGenerators = new Dictionary<long, IMyGravityProvider>();
-#endif
 
         public const float G_ACCELERATION = 9.81f;
 
@@ -777,22 +770,15 @@ namespace Digi.Helmet
             return HelmetLogicReturn.OK;
         }
 
-        private void UpdateCharacterReference(IMyCharacter ent)
+        private void UpdateCharacterReference(IMyCharacter charEnt)
         {
-            characterEntity = ent;
+            characterEntity = charEnt;
             characterDefinition = null;
             characterHasHelmet = false;
 
-            if(ent != null)
-            {
-                var obj = ent.GetObjectBuilder(false) as MyObjectBuilder_Character;
-
-                if(obj == null)
-                    return;
-
-                if(MyDefinitionManager.Static.Characters.TryGetValue(obj.CharacterModel, out characterDefinition))
-                    characterHasHelmet = (characterDefinition.SuitResourceStorage != null && characterDefinition.SuitResourceStorage.Count > 0);
-            }
+            // charEnt.ToString() returns character's model name
+            if(charEnt != null && MyDefinitionManager.Static.Characters.TryGetValue(charEnt.ToString(), out characterDefinition))
+                characterHasHelmet = (characterDefinition.SuitResourceStorage != null && characterDefinition.SuitResourceStorage.Count > 0);
         }
 
         private void RemoveHelmet(bool removeHud = true)
@@ -2328,13 +2314,17 @@ namespace Digi.Helmet
 
                 var sphere = generator as IMyGravityGeneratorSphere;
 
-                if(sphere != null && Vector3D.DistanceSquared(sphere.WorldMatrix.Translation, point) <= (sphere.Radius * sphere.Radius))
+                if(sphere != null)
                 {
                     var dir = sphere.WorldMatrix.Translation - point;
-                    dir.Normalize();
-                    artificialDir += dir * (flat.GravityAcceleration / G_ACCELERATION);
+
+                    if(dir.LengthSquared() <= (sphere.Radius * sphere.Radius))
+                    {
+                        dir.Normalize();
+                        artificialDir += dir * (sphere.GravityAcceleration / G_ACCELERATION);
+                    }
                 }
-#endif // STABLE
+#endif
             }
 
             float mul = MathHelper.Clamp(1f - naturalForce * 2f, 0f, 1f);
@@ -2889,7 +2879,6 @@ namespace Digi.Helmet
 
                     if(cubeBuilder || buildTool)
                     {
-#if !STABLE // TODO STABLE CONDITION
                         var b = Sandbox.Game.Gui.MyHud.BlockInfo;
 
                         if(!string.IsNullOrEmpty(b.BlockName))
@@ -2948,7 +2937,6 @@ namespace Digi.Helmet
                         {
                             str.Append("Waiting for selection...").AppendLine();
                         }
-#endif
                     }
                     else if(handDrill)
                     {
@@ -2956,20 +2944,20 @@ namespace Digi.Helmet
                     }
                     else if(handWeapon)
                     {
-                        var obj = holdingTool.GetObjectBuilder(false) as MyObjectBuilder_AutomaticRifle;
-                        var physDef = MyDefinitionManager.Static.GetPhysicalItemForHandItem(obj.GetId());
-                        var physWepDef = physDef as MyWeaponItemDefinition;
+                        var gun = (IMyHandheldGunObject<MyGunBase>)holdingTool;
+                        var gunUser = (IMyGunBaseUser)holdingTool;
+                        var physWepDef = MyDefinitionManager.Static.GetPhysicalItemForHandItem(gunUser.PhysicalItemId) as MyWeaponItemDefinition;
                         MyWeaponDefinition wepDef;
 
                         if(physWepDef != null && MyDefinitionManager.Static.TryGetWeaponDefinition(physWepDef.WeaponDefinitionId, out wepDef))
                         {
-                            str.Append(physDef.DisplayNameText).AppendLine();
+                            str.Append(physWepDef.DisplayNameText).AppendLine();
 
                             var inv = characterEntity.GetInventory();
 
                             if(inv != null)
                             {
-                                var currentMag = obj.GunBase.CurrentAmmoMagazineName;
+                                var currentMag = gun.GunBase.CurrentAmmoMagazineDefinition.DisplayNameText;
                                 var types = wepDef.AmmoMagazinesId.Length;
 
                                 float rounds = 0;
@@ -2995,7 +2983,7 @@ namespace Digi.Helmet
                                         magName = magName.Substring(0, 20) + "..";
 
                                     if(magId.SubtypeName == currentMag)
-                                        rounds = obj.GunBase.RemainingAmmo + mags * magDef.Capacity;
+                                        rounds = gun.CurrentMagazineAmmunition + mags * magDef.Capacity;
 
                                     tmp.Append(mags).Append("x ").Append(magName).AppendLine();
                                 }
@@ -3014,7 +3002,7 @@ namespace Digi.Helmet
                     {
                         try
                         {
-                            var toolbarObj = (cockpit as IMyCubeBlock).GetObjectBuilderCubeBlock(false) as MyObjectBuilder_ShipController;
+                            var toolbarObj = (MyObjectBuilder_ShipController)cockpit.GetObjectBuilderCubeBlock(false);
                             var grid = cockpit.CubeGrid as IMyCubeGrid;
 
                             if(toolbarObj.Toolbar != null && toolbarObj.Toolbar.SelectedSlot.HasValue)
@@ -3132,29 +3120,10 @@ namespace Digi.Helmet
                                         {
                                             if(block is IMySmallGatlingGun)
                                             {
-                                                var obj = block.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallGatlingGun;
-                                                var def = MyDefinitionManager.Static.GetCubeBlockDefinition(block.BlockDefinition) as MyWeaponBlockDefinition;
-                                                var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
-                                                var currentMag = obj.GunBase.CurrentAmmoMagazineName;
-                                                var types = wepDef.AmmoMagazinesId.Length;
-
+                                                var gun = (IMyGunObject<MyGunBase>)block;
                                                 gatlingGuns++;
-                                                gatlingAmmo += obj.GunBase.RemainingAmmo;
-
-                                                for(int i = 0; i < types; i++)
-                                                {
-                                                    var magId = wepDef.AmmoMagazinesId[i];
-
-                                                    if(magId.SubtypeName == currentMag)
-                                                    {
-                                                        magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
-
-                                                        if((block as MyEntity).TryGetInventory(out inv))
-                                                            gatlingAmmo += (int)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
-
-                                                        break;
-                                                    }
-                                                }
+                                                gatlingAmmo = gun.GetAmmunitionAmount();
+                                                magDef = gun.GunBase.CurrentAmmoMagazineDefinition;
                                             }
                                         }
 
@@ -3186,30 +3155,10 @@ namespace Digi.Helmet
                                         {
                                             if(block is IMySmallMissileLauncher && reloadable == (block is IMySmallMissileLauncherReload))
                                             {
-                                                var obj = block.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallMissileLauncher;
-                                                var def = MyDefinitionManager.Static.GetCubeBlockDefinition(block.BlockDefinition) as MyWeaponBlockDefinition;
-                                                var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
-                                                var currentMag = obj.GunBase.CurrentAmmoMagazineName;
-                                                var types = wepDef.AmmoMagazinesId.Length;
-
+                                                var gun = (IMyGunObject<MyGunBase>)block;
                                                 launchers++;
-                                                launcherAmmo += obj.GunBase.RemainingAmmo;
-
-                                                for(int i = 0; i < types; i++)
-                                                {
-                                                    var magId = wepDef.AmmoMagazinesId[i];
-
-                                                    if(magId.SubtypeName == currentMag)
-                                                    {
-                                                        magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
-                                                        var inv = block.GetInventory();
-
-                                                        if(inv != null)
-                                                            launcherAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
-
-                                                        break;
-                                                    }
-                                                }
+                                                launcherAmmo = gun.GetAmmunitionAmount();
+                                                magDef = gun.GunBase.CurrentAmmoMagazineDefinition;
                                             }
                                         }
 
@@ -3282,11 +3231,12 @@ namespace Digi.Helmet
                                     AppendOresInRange(str);
                                 }
 
-                                // disabled because it automatically shows ammo for selected weapons...
-                                // TODO I should probably remove these ?
-                                bool showGatling = false; //blockName.Contains("gatling");
-                                bool showLaunchers = false; //blockName.Contains("launchers");
-                                bool showAmmo = false; //blockName.Contains("ammo");
+                                // TODO I should probably remove these ? - because selecting weapons shows this data anyway
+                                bool showGatling = blockName.Contains("gatling");
+                                bool showLaunchers = blockName.Contains("launchers");
+
+                                // TODO add turrets status?
+                                bool showAmmo = blockName.Contains("ammo");
                                 bool showCargo = blockName.Contains("cargo");
                                 bool showOxygen = blockName.Contains("oxygen");
                                 bool showHydrogen = blockName.Contains("hydrogen");
@@ -3317,57 +3267,15 @@ namespace Digi.Helmet
                                     {
                                         if(showGatling && block is IMySmallGatlingGun)
                                         {
-                                            var obj = block.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallGatlingGun;
-                                            var def = MyDefinitionManager.Static.GetCubeBlockDefinition(block.BlockDefinition) as MyWeaponBlockDefinition;
-                                            var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
-                                            var currentMag = obj.GunBase.CurrentAmmoMagazineName;
-                                            var types = wepDef.AmmoMagazinesId.Length;
-
+                                            var gun = (IMyGunObject<MyGunBase>)block;
                                             gatlingGuns++;
-                                            gatlingAmmo += obj.GunBase.RemainingAmmo;
-
-                                            for(int i = 0; i < types; i++)
-                                            {
-                                                var magId = wepDef.AmmoMagazinesId[i];
-
-                                                if(magId.SubtypeName == currentMag)
-                                                {
-                                                    var magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
-                                                    var inv = block.GetInventory();
-
-                                                    if(inv != null)
-                                                        gatlingAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
-
-                                                    break;
-                                                }
-                                            }
+                                            gatlingAmmo += gun.GetAmmunitionAmount();
                                         }
                                         else if(showLaunchers && block is IMySmallMissileLauncher)
                                         {
-                                            var obj = block.GetObjectBuilderCubeBlock(false) as MyObjectBuilder_SmallMissileLauncher;
-                                            var def = MyDefinitionManager.Static.GetCubeBlockDefinition(block.BlockDefinition) as MyWeaponBlockDefinition;
-                                            var wepDef = MyDefinitionManager.Static.GetWeaponDefinition(def.WeaponDefinitionId);
-                                            var currentMag = obj.GunBase.CurrentAmmoMagazineName;
-                                            var types = wepDef.AmmoMagazinesId.Length;
-
+                                            var gun = (IMyGunObject<MyGunBase>)block;
                                             launchers++;
-                                            launchersAmmo += obj.GunBase.RemainingAmmo;
-
-                                            for(int i = 0; i < types; i++)
-                                            {
-                                                var magId = wepDef.AmmoMagazinesId[i];
-
-                                                if(magId.SubtypeName == currentMag)
-                                                {
-                                                    var magDef = MyDefinitionManager.Static.GetAmmoMagazineDefinition(magId);
-                                                    var inv = block.GetInventory();
-
-                                                    if(inv != null)
-                                                        launchersAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
-
-                                                    break;
-                                                }
-                                            }
+                                            launchersAmmo += gun.GetAmmunitionAmount();
                                         }
                                         else if(showCargo && block is IMyCargoContainer)
                                         {
