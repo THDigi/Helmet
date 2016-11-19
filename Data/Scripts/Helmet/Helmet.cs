@@ -5,11 +5,13 @@ using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
+using Sandbox.Game.Entities.Character.Components;
 using Sandbox.Game.EntityComponents;
 using Sandbox.Game.Lights;
 using Sandbox.Game.Weapons;
 using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces; // needed for TerminalPropertyExtensions
+using Sandbox.ModAPI.Weapons;
 using SpaceEngineers.Game.ModAPI;
 using VRage;
 using VRage.Game;
@@ -23,7 +25,6 @@ using VRage.ObjectBuilders;
 using VRage.Utils;
 using VRageMath;
 
-using Digi.Utils;
 
 using IMyControllableEntity = Sandbox.Game.Entities.IMyControllableEntity;
 
@@ -32,6 +33,11 @@ namespace Digi.Helmet
     [MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation)]
     public class Helmet : MySessionComponentBase
     {
+        public override void LoadData()
+        {
+            Log.SetUp("Helmet", 428842256);
+        }
+
         private const string MOD_DEV_NAME = "Helmet.dev";
         private const int WORKSHOP_DEV_ID = 429601133;
 

@@ -11,6 +11,18 @@ using Digi.Utils;
 
 namespace Digi.Helmet
 {
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Welder))]
+    public class Welder : Item { }
+
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AngleGrinder))]
+    public class Grinder : Item { }
+
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_HandDrill))]
+    public class Drill : Item { }
+
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AutomaticRifle))]
+    public class Rifle : Item { }
+
     public class Item : MyGameLogicComponent
     {
         private MyObjectBuilder_EntityBase obj;
@@ -50,16 +62,4 @@ namespace Digi.Helmet
             return Entity.GetObjectBuilder(copy);
         }
     }
-    
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Welder))]
-    public class Welder : Item { }
-    
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AngleGrinder))]
-    public class Grinder : Item { }
-    
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_HandDrill))]
-    public class Drill : Item { }
-    
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AutomaticRifle))]
-    public class Weapon : Item { }
 }
