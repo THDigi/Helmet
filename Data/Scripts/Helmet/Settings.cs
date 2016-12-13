@@ -5,7 +5,6 @@ using System.Text;
 using System.IO;
 using Sandbox.ModAPI;
 using VRageMath;
-using Digi.Utils;
 
 namespace Digi.Helmet
 {

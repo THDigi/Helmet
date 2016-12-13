@@ -16,6 +16,7 @@ using SpaceEngineers.Game.ModAPI;
 using VRage;
 using VRage.Game;
 using VRage.Game.Components;
+using VRage.Game.Components.Session;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.Game.ObjectBuilders.Definitions;
@@ -24,7 +25,6 @@ using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRage.Utils;
 using VRageMath;
-
 
 using IMyControllableEntity = Sandbox.Game.Entities.IMyControllableEntity;
 
@@ -64,7 +64,9 @@ namespace Digi.Helmet
         private bool helmetOn = false;
         private bool inCockpit = false;
         private bool markerBlinkMemory = false;
-        
+        private bool vanillaHUD = true;
+        private bool quickToggleMarkers = true;
+
         public readonly static Dictionary<long, IMyGravityProvider> gravityGenerators = new Dictionary<long, IMyGravityProvider>();
 
         public const float G_ACCELERATION = 9.81f;
@@ -110,7 +112,6 @@ namespace Digi.Helmet
         private MatrixD prevHeadMatrix;
         private int lastOxygenEnv = 0;
         private bool fatalError = false;
-        private byte menuInChat = 0;
 
         public static IMyEntity holdingTool = null;
         public static MyObjectBuilderType holdingToolTypeId;
@@ -245,7 +246,6 @@ namespace Digi.Helmet
 
                 MyAPIGateway.Utilities.MessageEntered += MessageEntered;
                 MyAPIGateway.Session.DamageSystem.RegisterDestroyHandler(999, EntityKilled);
-                MyAPIGateway.GuiControlCreated += GUICreated;
 
                 for(int id = 0; id < Settings.TOTAL_ELEMENTS; id++)
                 {
@@ -253,7 +253,7 @@ namespace Digi.Helmet
                 }
 
                 // TODO feature: lights
-                //var mods = MyAPIGateway.Session.GetCheckpoint("null").Mods;
+                //var mods = MyAPIGateway.Session.GetCheckpoint("null").Mods; // TODO use Session.Mods
                 //bool found = false;
                 //
                 // TODO just hardcode the folder name to avoid GetCheckpoint()!
@@ -301,7 +301,6 @@ namespace Digi.Helmet
                     if(!isDedicatedHost)
                     {
                         MyAPIGateway.Utilities.MessageEntered -= MessageEntered;
-                        MyAPIGateway.GuiControlCreated -= GUICreated;
 
                         if(settings != null)
                         {
@@ -349,14 +348,6 @@ namespace Digi.Helmet
             }
         }
 
-        public void GUICreated(object obj)
-        {
-            var ui = obj.ToString();
-
-            if(ui == "Sandbox.Game.Gui.MyGuiScreenChat")
-                menuInChat = 2; // need to skip one tick because enter is still being registered as new-pressed this tick
-        }
-
         //private Benchmark bench_update = new Benchmark("update");
 
         public override void UpdateAfterSimulation()
@@ -370,14 +361,6 @@ namespace Digi.Helmet
 
                 if(isDedicatedHost)
                     return;
-
-                if(menuInChat > 0)
-                {
-                    if(menuInChat > 1)
-                        menuInChat--;
-                    else if(MyAPIGateway.Input.IsNewGameControlPressed(MyControlsSpace.CHAT_SCREEN) || MyAPIGateway.Input.IsNewKeyPressed(MyKeys.Escape))
-                        menuInChat = 0;
-                }
 
                 if(fatalError)
                     return; // stop trying if a fatal error occurs
@@ -400,6 +383,7 @@ namespace Digi.Helmet
                 }
 
                 tick++; // global update tick
+                vanillaHUD = !MyAPIGateway.Session.Config.MinimalHud;
                 HelmetLogicReturn ret = UpdateHelmetLogic();
 
                 if(ret == HelmetLogicReturn.OK)
@@ -448,16 +432,6 @@ namespace Digi.Helmet
             {
                 var shipController = controlled as MyShipController;
                 UpdateCharacterReference(shipController.Pilot);
-
-                if(settings.toggleHelmetInCockpit && characterEntity != null && controlled is IMyCockpit)
-                {
-                    // FIXME whitelist...
-                    if(menuInChat == 0) // MyGuiScreenGamePlay.ActiveGameplayScreen == null && MyGuiScreenTerminal.GetCurrentScreen() == MyTerminalPageEnum.None)
-                    {
-                        if(MyAPIGateway.Input.IsNewGameControlPressed(MyControlsSpace.HELMET))
-                            characterEntity.SwitchHelmet();
-                    }
-                }
             }
             else
             {
@@ -534,6 +508,11 @@ namespace Digi.Helmet
             if(settings.hud)
             {
                 var controllableEntity = (controlled as IMyControllableEntity);
+
+                if(!vanillaHUD && MyAPIGateway.Input.IsNewGameControlPressed(MyControlsSpace.TOGGLE_SIGNALS) && !MyAPIGateway.Input.IsAnyCtrlKeyPressed() && MyAPIGateway.Input.IsInputReadable())
+                {
+                    quickToggleMarkers = !quickToggleMarkers;
+                }
 
                 if(tick % SKIP_TICKS_HUD == 0)
                 {
@@ -613,6 +592,9 @@ namespace Digi.Helmet
                         }
                     }
                 }
+
+                if(!quickToggleMarkers)
+                    hudElementData[Icons.MARKERS].showIcon = 0;
 
                 if(hudElementData[Icons.MARKERS].showIcon > 0)
                 {
@@ -1437,7 +1419,6 @@ namespace Digi.Helmet
             hudMatrix = headMatrix;
             hudMatrix.Translation += hudMatrix.Forward * (HUDSCALE_DIST_ADJUST * (1.0 - settings.hudScale)); // off-set the HUD according to the HUD scale
             var headPos = hudMatrix.Translation + (hudMatrix.Backward * 0.25); // for glass curve effect
-            bool hudVisible = !MyAPIGateway.Session.Config.MinimalHud;
             removedHUD = false; // mark the HUD as not removed because we're about to spawn it
 
             // spawn and update the HUD elements
@@ -1463,10 +1444,10 @@ namespace Digi.Helmet
                     switch(settings.elements[id].hudMode)
                     {
                         case 1:
-                            showIcon = hudVisible;
+                            showIcon = vanillaHUD;
                             break;
                         case 2:
-                            showIcon = !hudVisible;
+                            showIcon = !vanillaHUD;
                             break;
                     }
                 }
@@ -1594,7 +1575,7 @@ namespace Digi.Helmet
                 var posRgid = cameraMatrix.Translation + cameraMatrix.Forward * 0.1;
                 var pos = (animationStart > 0 ? posHUD : Vector3D.Lerp(posRgid, posHUD, settings.crosshairSwayRatio));
 
-                MyTransparentGeometry.AddBillboardOriented(settings.crosshairTypes[settings.crosshairType], settings.crosshairColor, pos, matrix.Up, matrix.Right, settings.crosshairScale / 100f, 0, true, -1, 0);
+                MyTransparentGeometry.AddBillboardOriented(settings.crosshairTypes[settings.crosshairType], settings.crosshairColor, pos, matrix.Up, matrix.Right, settings.crosshairScale / 100f);
                 return;
             }
 
@@ -1632,13 +1613,13 @@ namespace Digi.Helmet
                         var dist = (float)dir.Normalize();
                         var pos = camPos + dir * MARKER_DISTANCE_CAMERA;
 
-                        MyTransparentGeometry.AddBillboardOriented("HelmetMarker", settings.markerColorGPS * ICON_ALPHA, pos, matrix.Up, matrix.Right, MARKER_SIZE * settings.markerScale, 0, true, -1, 0);
+                        MyTransparentGeometry.AddBillboardOriented("HelmetMarker", settings.markerColorGPS * ICON_ALPHA, pos, matrix.Up, matrix.Right, MARKER_SIZE * settings.markerScale);
 
                         var dot = dir.Dot(camMatrix.Forward);
 
                         if(dot >= AIM_ACCURACY)
                         {
-                            MyTransparentGeometry.AddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix.Up, matrix.Right, MARKER_SIZE * settings.markerScale * 1.2f, 0, true, -1, 0);
+                            MyTransparentGeometry.AddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix.Up, matrix.Right, MARKER_SIZE * settings.markerScale * 1.2f);
 
                             tmp.Clear();
                             tmp.Append(DISPLAY_PAD);
@@ -1670,7 +1651,7 @@ namespace Digi.Helmet
                         var dist = (float)dir.Normalize();
                         var pos = camPos + dir * MARKER_DISTANCE_CAMERA;
 
-                        MyTransparentGeometry.AddBillboardOriented("HelmetMarker", kv.Value.color * ICON_ALPHA, pos, matrix.Up, matrix.Right, kv.Value.size * settings.markerScale, 0, true, -1, 0);
+                        MyTransparentGeometry.AddBillboardOriented("HelmetMarker", kv.Value.color * ICON_ALPHA, pos, matrix.Up, matrix.Right, kv.Value.size * settings.markerScale);
 
                         // TODO speed arrow?
                         //var block = ent as IMyCubeBlock;
@@ -1730,7 +1711,7 @@ namespace Digi.Helmet
 
                         if(dot >= AIM_ACCURACY)
                         {
-                            MyTransparentGeometry.AddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix.Up, matrix.Right, kv.Value.size * settings.markerScale * 1.2f, 0, true, -1, 0);
+                            MyTransparentGeometry.AddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix.Up, matrix.Right, kv.Value.size * settings.markerScale * 1.2f);
 
                             tmp.Clear();
                             tmp.Append(DISPLAY_PAD);
@@ -3692,6 +3673,25 @@ namespace Digi.Helmet
         public static StringBuilder AppendRGB(this StringBuilder str, Color color)
         {
             return str.Append(color.R).Append(", ").Append(color.G).Append(", ").Append(color.B);
+        }
+
+        public static bool IsInputReadable(this VRage.ModAPI.IMyInput input)
+        {
+            // TODO detect properly: escape menu, F10 and F11 menus, mission screens, yes/no notifications.
+
+            var GUI = MyAPIGateway.Gui;
+
+            if(GUI.ChatEntryVisible || GUI.GetCurrentScreen != MyTerminalPageEnum.None)
+                return false;
+
+            try // HACK ActiveGamePlayScreen throws NRE when called while not in a menu
+            {
+                return GUI.ActiveGamePlayScreen == null;
+            }
+            catch(Exception)
+            {
+                return true;
+            }
         }
     }
 
