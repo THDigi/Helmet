@@ -86,7 +86,7 @@ namespace Digi.Helmet
         public const int SKIP_TICKS_FOV = 60;
         public const int SKIP_TICKS_HUD = 5;
         public const int SKIP_TICKS_GRAVITY = 2;
-        public const int SKIP_TICKS_PLANETS = 60 * 3;
+        public const int SKIP_TICKS_PLANETS = 60 * 30;
         public const int SKIP_TICKS_MARKERS = 30;
 
         public class HudElementData
@@ -175,7 +175,7 @@ namespace Digi.Helmet
             }
         }
 
-        public readonly Dictionary<long, MyPlanet> planets = new Dictionary<long, MyPlanet>();
+        public readonly List<MyPlanet> planets = new List<MyPlanet>();
         private readonly static HashSet<IMyEntity> ents = new HashSet<IMyEntity>(); // this is always empty
 
         private Dictionary<string, Vector3> lightOffsetDefault = new Dictionary<string, Vector3>();
@@ -640,7 +640,7 @@ namespace Digi.Helmet
 
                                 if(compId != null && compId.GetComponent(out idModule))
                                 {
-                                    switch(idModule.GetUserRelationToOwner(MyAPIGateway.Session.Player.PlayerID))
+                                    switch(idModule.GetUserRelationToOwner(MyAPIGateway.Session.Player.IdentityId))
                                     {
                                         case MyRelationsBetweenPlayerAndBlock.Enemies:
                                             color = settings.markerColorEnemy;
@@ -734,8 +734,8 @@ namespace Digi.Helmet
                                                           {
                                                               var p = e as MyPlanet;
 
-                                                              if(p != null && !planets.ContainsKey(e.EntityId))
-                                                                  planets.Add(e.EntityId, e as MyPlanet);
+                                                              if(p != null)
+                                                                  planets.Add(p);
 
                                                               return false; // no reason to add to the list
                                                           });
@@ -2239,10 +2239,8 @@ namespace Digi.Helmet
             naturalForce = 0;
             altitude = float.MaxValue;
 
-            foreach(var kv in planets)
+            foreach(var planet in planets)
             {
-                var planet = kv.Value;
-
                 if(planet.Closed || planet.MarkedForClose)
                     continue;
 
@@ -2261,44 +2259,25 @@ namespace Digi.Helmet
                 altitude = 0;
 
             naturalForce = naturalDir.Length();
-
+            
             foreach(var generator in gravityGenerators.Values)
             {
                 if(!generator.IsWorking)
                     continue;
-
+                
                 var flat = generator as IMyGravityGenerator;
-
-#if STABLE // TODO STABLE CONDITION
+                
                 if(flat != null)
                 {
-                    var box = new MyOrientedBoundingBoxD(flat.WorldMatrix.Translation, new Vector3(flat.FieldWidth / 2, flat.FieldHeight / 2, flat.FieldDepth / 2), Quaternion.CreateFromRotationMatrix(flat.WorldMatrix));
-
-                    if(box.Contains(ref point))
-                        artificialDir += flat.WorldMatrix.Down * flat.Gravity;
-
-                    continue;
-                }
-
-                var sphere = generator as IMyGravityGeneratorSphere;
-
-                if(sphere != null && Vector3D.DistanceSquared(sphere.WorldMatrix.Translation, point) <= (sphere.Radius * sphere.Radius))
-                {
-                    var dir = sphere.WorldMatrix.Translation - point;
-                    dir.Normalize();
-                    artificialDir += dir * (sphere.Gravity / G_ACCELERATION);
-                }
-#else
-                if(flat != null)
-                {
-                    var box = new MyOrientedBoundingBoxD(flat.WorldMatrix.Translation, flat.FieldSize / 2, Quaternion.CreateFromRotationMatrix(flat.WorldMatrix));
-
+                    // HACK flat.FieldSize returned itself, had to use a workaround.
+                    var box = new MyOrientedBoundingBoxD(flat.WorldMatrix.Translation, new Vector3(flat.FieldWidth, flat.FieldHeight, flat.FieldDepth) / 2, Quaternion.CreateFromRotationMatrix(flat.WorldMatrix));
+                    
                     if(box.Contains(ref point))
                         artificialDir += flat.WorldMatrix.Down * (flat.GravityAcceleration / G_ACCELERATION);
 
                     continue;
                 }
-
+                
                 var sphere = generator as IMyGravityGeneratorSphere;
 
                 if(sphere != null)
@@ -2311,7 +2290,6 @@ namespace Digi.Helmet
                         artificialDir += dir * (sphere.GravityAcceleration / G_ACCELERATION);
                     }
                 }
-#endif
             }
 
             float mul = MathHelper.Clamp(1f - naturalForce * 2f, 0f, 1f);
@@ -3286,19 +3264,19 @@ namespace Digi.Helmet
                                                 missiles += (float)inv.GetItemAmount(AMMO_MISSILES.GetId(), MyItemFlags.None);
                                             }
                                         }
-                                        else if((showOxygen || showHydrogen) && block is IMyOxygenTank)
+                                        else if((showOxygen || showHydrogen) && block is IMyGasTank)
                                         {
-                                            var tank = block as IMyOxygenTank;
+                                            var tank = block as IMyGasTank;
                                             var def = MyDefinitionManager.Static.GetCubeBlockDefinition(tank.BlockDefinition) as MyGasTankDefinition;
 
                                             if(showHydrogen && def.StoredGasId.SubtypeName == "Hydrogen")
                                             {
-                                                hydrogen += tank.GetOxygenLevel();
+                                                hydrogen += tank.FilledRatio;
                                                 hydrogenTanks += 1;
                                             }
                                             else if(showOxygen && def.StoredGasId.SubtypeName == "Oxygen")
                                             {
-                                                oxygen += tank.GetOxygenLevel();
+                                                oxygen += tank.FilledRatio;
                                                 oxygenTanks += 1;
                                             }
                                         }
@@ -3425,14 +3403,14 @@ namespace Digi.Helmet
         }
     }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TextPanel), "HelmetHUD_display", "HelmetHUD_displayLow")] // LCD blinking workaround
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TextPanel), true, "HelmetHUD_display", "HelmetHUD_displayLow")] // LCD blinking workaround, tied with entity update
     public class HelmetLCD : MyGameLogicComponent
     {
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
             Entity.NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME;
         }
-
+        
         public override void UpdateAfterSimulation()
         {
             try
@@ -3482,14 +3460,9 @@ namespace Digi.Helmet
                 Log.Error(e);
             }
         }
-
-        public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)
-        {
-            return Entity.GetObjectBuilder(copy);
-        }
     }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TextPanel), "HelmetHUD_ghostLCD")]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TextPanel), true, "HelmetHUD_ghostLCD")] // LCD blinking workaround, tied with entity update
     public class GhostLCD : MyGameLogicComponent
     {
         private string prevText = "";
@@ -3499,7 +3472,7 @@ namespace Digi.Helmet
         {
             Entity.NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME;
         }
-
+        
         public override void UpdateAfterSimulation()
         {
             try
@@ -3545,24 +3518,19 @@ namespace Digi.Helmet
                 Log.Error(e);
             }
         }
-
-        public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)
-        {
-            return Entity.GetObjectBuilder(copy);
-        }
     }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGenerator))]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGenerator), false)]
     public class GravityGeneratorFlat : GravityGeneratorLogic { }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGeneratorSphere))]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGeneratorSphere), false)]
     public class GravityGeneratorSphere : GravityGeneratorLogic { }
 
     public class GravityGeneratorLogic : MyGameLogicComponent
     {
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            Entity.NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+            NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
 
         public override void UpdateOnceBeforeFrame()
@@ -3592,23 +3560,34 @@ namespace Digi.Helmet
             {
                 Log.Error(e);
             }
-        }
 
-        public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)
-        {
-            return Entity.GetObjectBuilder(copy);
+            NeedsUpdate = MyEntityUpdateEnum.NONE; // HACK required until the component is fixed to remove it itself
         }
     }
 
     // TODO feature: lights
     /*
     // test if this actually works!
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Character))]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Character), false)]
     public class Character : MyGameLogicComponent
     {
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            Entity.NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+            NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+        }
+
+        public override void Close()
+        {
+            try
+            {
+                Helmet.characterEntities.Remove(Entity.EntityId);
+            }
+            catch(Exception e)
+            {
+                Log.Error(e);
+            }
+
+            NeedsUpdate = MyEntityUpdateEnum.NONE; // HACK required until the component removes it itself
         }
 
         public override void UpdateOnceBeforeFrame()
@@ -3626,23 +3605,6 @@ namespace Digi.Helmet
             {
                 Log.Error(e);
             }
-        }
-
-        public override void Close()
-        {
-            try
-            {
-                Helmet.characterEntities.Remove(Entity.EntityId);
-            }
-            catch(Exception e)
-            {
-                Log.Error(e);
-            }
-        }
-
-        public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)
-        {
-            return Entity.GetObjectBuilder(copy);
         }
     }
     */

@@ -10,16 +10,16 @@ using VRage.ModAPI;
 
 namespace Digi.Helmet
 {
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Welder))]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Welder), false)]
     public class Welder : Item { }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AngleGrinder))]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AngleGrinder), false)]
     public class Grinder : Item { }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_HandDrill))]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_HandDrill), false)]
     public class Drill : Item { }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AutomaticRifle))]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AutomaticRifle), false)]
     public class Rifle : Item { }
 
     public class Item : MyGameLogicComponent
@@ -29,9 +29,14 @@ namespace Digi.Helmet
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
             obj = objectBuilder;
-            Entity.NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+            NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
-        
+
+        public override void Close()
+        {
+            NeedsUpdate = MyEntityUpdateEnum.NONE; // HACK required until the component removes it itself
+        }
+
         public override void UpdateOnceBeforeFrame()
         {
             try
@@ -54,11 +59,6 @@ namespace Digi.Helmet
             {
                 Log.Error(e);
             }
-        }
-        
-        public override MyObjectBuilder_EntityBase GetObjectBuilder(bool copy = false)
-        {
-            return Entity.GetObjectBuilder(copy);
         }
     }
 }
