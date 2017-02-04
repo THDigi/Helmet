@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Linq;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.ModAPI;
-using VRage.Game;
-using VRage.Game.ModAPI;
 using VRage.ObjectBuilders;
 using VRage.Game.Components;
 using VRage.ModAPI;
@@ -36,6 +33,9 @@ namespace Digi.Helmet
         {
             try
             {
+                if(MyAPIGateway.Session == null || MyAPIGateway.Session.Player == null || MyAPIGateway.Session.Player.Character == null)
+                    return;
+
                 var equipped = MyAPIGateway.Session.Player.Character.EquippedTool;
 
                 if(Entity == equipped)

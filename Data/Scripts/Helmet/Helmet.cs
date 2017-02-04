@@ -383,7 +383,10 @@ namespace Digi.Helmet
                 }
 
                 tick++; // global update tick
-                vanillaHUD = !MyAPIGateway.Session.Config.MinimalHud;
+
+                if(tick % 6 == 0)
+                    vanillaHUD = !MyAPIGateway.Session.Config.MinimalHud;
+
                 HelmetLogicReturn ret = UpdateHelmetLogic();
 
                 if(ret == HelmetLogicReturn.OK)
@@ -509,7 +512,7 @@ namespace Digi.Helmet
             {
                 var controllableEntity = (controlled as IMyControllableEntity);
 
-                if(!vanillaHUD && MyAPIGateway.Input.IsNewGameControlPressed(MyControlsSpace.TOGGLE_SIGNALS) && !MyAPIGateway.Input.IsAnyCtrlKeyPressed() && MyAPIGateway.Input.IsInputReadable())
+                if(!vanillaHUD && !MyAPIGateway.Gui.IsCursorVisible && !MyAPIGateway.Gui.ChatEntryVisible && MyAPIGateway.Input.IsNewGameControlPressed(MyControlsSpace.TOGGLE_SIGNALS) && !MyAPIGateway.Input.IsAnyCtrlKeyPressed())
                 {
                     quickToggleMarkers = !quickToggleMarkers;
                 }
@@ -625,6 +628,33 @@ namespace Digi.Helmet
                                 if(!charOrCockpit && ent.EntityId == characterEntity.EntityId)
                                     continue; // do not show myself
 
+                                var size = MARKER_SIZE;
+                                var chr = ent as IMyCharacter;
+                                Color color;
+
+                                if(chr != null)
+                                {
+                                    if(hudEntityMarkers.ContainsKey(chr))
+                                        continue;
+
+                                    var relation = MyAPIGateway.Session.Player.GetRelationsBetweenPlayers(chr.ControllerInfo.ControllingIdentityId);
+                                    color = settings.markerColorNeutral;
+
+                                    switch(relation)
+                                    {
+                                        case MyRelationsBetweenPlayers.Self:
+                                        case MyRelationsBetweenPlayers.Allies:
+                                            color = settings.markerColorFaction;
+                                            break;
+                                        case MyRelationsBetweenPlayers.Enemies:
+                                            color = settings.markerColorEnemy;
+                                            break;
+                                    }
+                                    
+                                    hudEntityMarkers.Add(chr, new HelmetHudMarker(chr.DisplayName, color, size / 2));
+                                    continue;
+                                }
+
                                 var grid = ent.GetTopMostParent(null) as MyCubeGrid;
 
                                 if(grid == null || grid.IsPreview)
@@ -635,7 +665,7 @@ namespace Digi.Helmet
 
                                 MyIDModule idModule;
                                 var compId = ent as IMyComponentOwner<MyIDModule>;
-                                var color = settings.markerColorNeutral;
+                                color = settings.markerColorNeutral;
                                 string name = grid.DisplayName;
 
                                 if(compId != null && compId.GetComponent(out idModule))
@@ -660,7 +690,6 @@ namespace Digi.Helmet
                                     continue;
 
                                 var cube = ent as IMyCubeBlock;
-                                var size = MARKER_SIZE;
 
                                 if(cube != null)
                                 {
@@ -1177,8 +1206,7 @@ namespace Digi.Helmet
                             Vector3D coneTipRight, coneEndRight, coneDirRight;
                             GetLightConeData(true, CONE_DUST_LENGTH, coneEndOffset, out coneTipLeft, out coneEndLeft, out coneDirLeft);
                             GetLightConeData(false, CONE_DUST_LENGTH, coneEndOffset, out coneTipRight, out coneEndRight, out coneDirRight);
-
-                            // HACK DEBUG
+                            
                             //{
                             //    var m = MatrixD.CreateWorld(coneTipLeft, coneDirLeft, headMatrix.Up);
                             //    var c = Color.Red * 0.1f;
@@ -2037,7 +2065,7 @@ namespace Digi.Helmet
             // if warning icon is shown and the blink state is on and this bar is below the warning percent then add a red background
             if(warningBlinkOn && elementData.value <= elementSettings.warnPercent && hudElementData[Icons.WARNING].show)
             {
-                // TODO > Issue: this glitches out by moving around...
+                // DEBUG test?
                 //var pos = matrix.Translation + (settings.elements[id].flipHorizontal ? matrix.Right : matrix.Left) * 0.00325;
                 //MyTransparentGeometry.AddBillboardOriented("HelmetHUDBackground_Warning", new Color(255, 0, 0) * 0.25f, pos, matrix.Down, matrix.Left, 0.004f, 0.016f);
 
@@ -2259,25 +2287,25 @@ namespace Digi.Helmet
                 altitude = 0;
 
             naturalForce = naturalDir.Length();
-            
+
             foreach(var generator in gravityGenerators.Values)
             {
                 if(!generator.IsWorking)
                     continue;
-                
+
                 var flat = generator as IMyGravityGenerator;
-                
+
                 if(flat != null)
                 {
                     // HACK flat.FieldSize returned itself, had to use a workaround.
                     var box = new MyOrientedBoundingBoxD(flat.WorldMatrix.Translation, new Vector3(flat.FieldWidth, flat.FieldHeight, flat.FieldDepth) / 2, Quaternion.CreateFromRotationMatrix(flat.WorldMatrix));
-                    
+
                     if(box.Contains(ref point))
                         artificialDir += flat.WorldMatrix.Down * (flat.GravityAcceleration / G_ACCELERATION);
 
                     continue;
                 }
-                
+
                 var sphere = generator as IMyGravityGeneratorSphere;
 
                 if(sphere != null)
@@ -2579,21 +2607,10 @@ namespace Digi.Helmet
                                 {
                                     shipLGs++;
 
-                                    // HACK no real way to get the LG's ready-to-lock state
-                                    {
-                                        var action = lg.GetActionWithName("Lock");
-
-                                        if(action != null)
-                                        {
-                                            tmp.Clear();
-                                            action.WriteValue(lg, tmp);
-
-                                            if(tmp.Length > 0 && tmp[0] == 'R') // the issue with this is clients using other languages than english
-                                                shipLGsReady++;
-                                        }
-                                    }
-
-                                    if(lg.IsLocked)
+                                    // HACK SpaceEngineers.Game.ModAPI.Ingame.LandingGearMode is prohibited...
+                                    if((int)lg.LockMode == 1) // ready to lock?
+                                        shipLGsReady++;
+                                    else if(lg.IsLocked)
                                         shipLGsLocked++;
                                 }
 
@@ -3410,7 +3427,7 @@ namespace Digi.Helmet
         {
             Entity.NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME;
         }
-        
+
         public override void UpdateAfterSimulation()
         {
             try
@@ -3472,7 +3489,7 @@ namespace Digi.Helmet
         {
             Entity.NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME;
         }
-        
+
         public override void UpdateAfterSimulation()
         {
             try
@@ -3635,23 +3652,24 @@ namespace Digi.Helmet
             return str.Append(color.R).Append(", ").Append(color.G).Append(", ").Append(color.B);
         }
 
-        public static bool IsInputReadable(this VRage.ModAPI.IMyInput input)
+        public static MyRelationsBetweenPlayers GetRelationsBetweenPlayers(this IMyPlayer player1, long playeIdentity2)
         {
-            // TODO detect properly: escape menu, F10 and F11 menus, mission screens, yes/no notifications.
+            if(player1.IdentityId == playeIdentity2)
+                return MyRelationsBetweenPlayers.Self;
 
-            var GUI = MyAPIGateway.Gui;
+            var faction1 = MyAPIGateway.Session.Factions.TryGetPlayerFaction(player1.IdentityId);
+            var faction2 = MyAPIGateway.Session.Factions.TryGetPlayerFaction(playeIdentity2);
 
-            if(GUI.ChatEntryVisible || GUI.GetCurrentScreen != MyTerminalPageEnum.None)
-                return false;
+            if(faction1 == null || faction2 == null)
+                return MyRelationsBetweenPlayers.Enemies;
 
-            try // HACK ActiveGamePlayScreen throws NRE when called while not in a menu
-            {
-                return GUI.ActiveGamePlayScreen == null;
-            }
-            catch(Exception)
-            {
-                return true;
-            }
+            if(faction1 == faction2)
+                return MyRelationsBetweenPlayers.Allies;
+
+            if(MyAPIGateway.Session.Factions.GetRelationBetweenFactions(faction1.FactionId, faction2.FactionId) == MyRelationsBetweenFactions.Neutral)
+                return MyRelationsBetweenPlayers.Neutral;
+
+            return MyRelationsBetweenPlayers.Enemies;
         }
     }
 
