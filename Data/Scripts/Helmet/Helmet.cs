@@ -3520,10 +3520,10 @@ namespace Digi.Helmet
         }
     }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGenerator), false)]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGenerator), true)]
     public class GravityGeneratorFlat : GravityGeneratorLogic { }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGeneratorSphere), false)]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGeneratorSphere), true)]
     public class GravityGeneratorSphere : GravityGeneratorLogic { }
 
     public class GravityGeneratorLogic : MyGameLogicComponent
@@ -3560,8 +3560,6 @@ namespace Digi.Helmet
             {
                 Log.Error(e);
             }
-
-            NeedsUpdate = MyEntityUpdateEnum.NONE; // HACK required until the component is fixed to remove it itself
         }
     }
 

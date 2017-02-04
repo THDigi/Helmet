@@ -10,49 +10,40 @@ using VRage.ModAPI;
 
 namespace Digi.Helmet
 {
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Welder), false)]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_Welder), true)]
     public class Welder : Item { }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AngleGrinder), false)]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AngleGrinder), true)]
     public class Grinder : Item { }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_HandDrill), false)]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_HandDrill), true)]
     public class Drill : Item { }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AutomaticRifle), false)]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_AutomaticRifle), true)]
     public class Rifle : Item { }
 
     public class Item : MyGameLogicComponent
     {
         private MyObjectBuilder_EntityBase obj;
-        
+
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
             obj = objectBuilder;
             NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
-
-        public override void Close()
-        {
-            NeedsUpdate = MyEntityUpdateEnum.NONE; // HACK required until the component removes it itself
-        }
-
+        
         public override void UpdateOnceBeforeFrame()
         {
             try
             {
-                if(MyAPIGateway.Session.ControlledObject != null && MyAPIGateway.Session.ControlledObject.Entity is IMyCharacter)
+                var equipped = MyAPIGateway.Session.Player.Character.EquippedTool;
+
+                if(Entity == equipped)
                 {
-                    var charEnt = MyAPIGateway.Session.ControlledObject.Entity;
-                    var charObj = charEnt.GetObjectBuilder(false) as MyObjectBuilder_Character;
-                    
-                    if(charObj.HandWeapon != null && Entity.EntityId == charObj.HandWeapon.EntityId)
-                    {
-                        Helmet.holdingTool = Entity;
-                        Helmet.holdingToolTypeId = obj.TypeId;
-                    }
+                    Helmet.holdingTool = Entity;
+                    Helmet.holdingToolTypeId = obj.TypeId;
                 }
-                
+
                 obj = null;
             }
             catch(Exception e)
