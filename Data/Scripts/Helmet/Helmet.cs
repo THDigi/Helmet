@@ -337,14 +337,21 @@ namespace Digi.Helmet
 
         public void EntityKilled(object obj, MyDamageInformation info)
         {
-            if(characterEntity == null)
-                return;
-
-            var ent = obj as IMyCharacter;
-
-            if(ent != null && characterEntity.EntityId == ent.EntityId && glassBreakCauses.Contains(info.Type))
+            try
             {
-                helmetBroken = ent.EntityId;
+                if(characterEntity == null)
+                    return;
+
+                var ent = obj as IMyCharacter;
+
+                if(ent != null && characterEntity.EntityId == ent.EntityId && glassBreakCauses.Contains(info.Type))
+                {
+                    helmetBroken = ent.EntityId;
+                }
+            }
+            catch(Exception e)
+            {
+                Log.Error(e);
             }
         }
 
@@ -650,7 +657,7 @@ namespace Digi.Helmet
                                             color = settings.markerColorEnemy;
                                             break;
                                     }
-                                    
+
                                     hudEntityMarkers.Add(chr, new HelmetHudMarker(chr.DisplayName, color, size / 2));
                                     continue;
                                 }
@@ -1546,13 +1553,13 @@ namespace Digi.Helmet
                                 }
 
                                 color *= alpha;
-                                MyTransparentGeometry.AddBillboardOriented(settings.defaultElements[id].material, color, matrix.Translation, matrix.Down, matrix.Left, 0.0025f);
+                                MyTransparentGeometry.AddBillboardOriented(settings.defaultElements[id].material, color, matrix.Translation, matrix.Left, matrix.Down, 0.0025f);
                                 break;
                             case Icons.WARNING:
                                 if(show)
                                 {
                                     if(warningBlinkOn)
-                                        MyTransparentGeometry.AddBillboardOriented("HelmetHUDIcon_Warning", Color.White * alpha, matrix.Translation, matrix.Down, matrix.Left, 0.0075f);
+                                        MyTransparentGeometry.AddBillboardOriented("HelmetHUDIcon_Warning", Color.White * alpha, matrix.Translation, matrix.Left, matrix.Down, 0.0075f);
                                 }
                                 else
                                 {
@@ -1603,7 +1610,7 @@ namespace Digi.Helmet
                 var posRgid = cameraMatrix.Translation + cameraMatrix.Forward * 0.1;
                 var pos = (animationStart > 0 ? posHUD : Vector3D.Lerp(posRgid, posHUD, settings.crosshairSwayRatio));
 
-                MyTransparentGeometry.AddBillboardOriented(settings.crosshairTypes[settings.crosshairType], settings.crosshairColor, pos, matrix.Up, matrix.Right, settings.crosshairScale / 100f);
+                MyTransparentGeometry.AddBillboardOriented(settings.crosshairTypes[settings.crosshairType], settings.crosshairColor, pos, matrix.Left, matrix.Down, settings.crosshairScale / 100f);
                 return;
             }
 
@@ -1641,13 +1648,13 @@ namespace Digi.Helmet
                         var dist = (float)dir.Normalize();
                         var pos = camPos + dir * MARKER_DISTANCE_CAMERA;
 
-                        MyTransparentGeometry.AddBillboardOriented("HelmetMarker", settings.markerColorGPS * ICON_ALPHA, pos, matrix.Up, matrix.Right, MARKER_SIZE * settings.markerScale);
+                        MyTransparentGeometry.AddBillboardOriented("HelmetMarker", settings.markerColorGPS * ICON_ALPHA, pos, matrix.Left, matrix.Down, MARKER_SIZE * settings.markerScale);
 
                         var dot = dir.Dot(camMatrix.Forward);
 
                         if(dot >= AIM_ACCURACY)
                         {
-                            MyTransparentGeometry.AddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix.Up, matrix.Right, MARKER_SIZE * settings.markerScale * 1.2f);
+                            MyTransparentGeometry.AddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix.Left, matrix.Down, MARKER_SIZE * settings.markerScale * 1.2f);
 
                             tmp.Clear();
                             tmp.Append(DISPLAY_PAD);
@@ -1679,7 +1686,7 @@ namespace Digi.Helmet
                         var dist = (float)dir.Normalize();
                         var pos = camPos + dir * MARKER_DISTANCE_CAMERA;
 
-                        MyTransparentGeometry.AddBillboardOriented("HelmetMarker", kv.Value.color * ICON_ALPHA, pos, matrix.Up, matrix.Right, kv.Value.size * settings.markerScale);
+                        MyTransparentGeometry.AddBillboardOriented("HelmetMarker", kv.Value.color * ICON_ALPHA, pos, matrix.Left, matrix.Down, kv.Value.size * settings.markerScale);
 
                         // TODO speed arrow?
                         //var block = ent as IMyCubeBlock;
@@ -1739,7 +1746,7 @@ namespace Digi.Helmet
 
                         if(dot >= AIM_ACCURACY)
                         {
-                            MyTransparentGeometry.AddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix.Up, matrix.Right, kv.Value.size * settings.markerScale * 1.2f);
+                            MyTransparentGeometry.AddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix.Left, matrix.Down, kv.Value.size * settings.markerScale * 1.2f);
 
                             tmp.Clear();
                             tmp.Append(DISPLAY_PAD);
@@ -1794,7 +1801,7 @@ namespace Digi.Helmet
                         dir.Normalize();
                         var target = camPos + dir * MARKER_DISTANCE_CAMERA;
                         
-                        MyTransparentGeometry.AddBillboardOriented("HelmetMarker", Color.Purple * ICON_ALPHA, target, matrix.Up, matrix.Right, MARKER_SIZE, 0, true, -1, 0);
+                        MyTransparentGeometry.AddBillboardOriented("HelmetMarker", Color.Purple * ICON_ALPHA, target, matrix.Left, matrix.Up, MARKER_SIZE, 0, true, -1, 0);
                         
                         MyAPIGateway.Utilities.ShowNotification(def.MinedOre, 16);
                     }
@@ -2067,7 +2074,7 @@ namespace Digi.Helmet
             {
                 // DEBUG test?
                 //var pos = matrix.Translation + (settings.elements[id].flipHorizontal ? matrix.Right : matrix.Left) * 0.00325;
-                //MyTransparentGeometry.AddBillboardOriented("HelmetHUDBackground_Warning", new Color(255, 0, 0) * 0.25f, pos, matrix.Down, matrix.Left, 0.004f, 0.016f);
+                //MyTransparentGeometry.AddBillboardOriented("HelmetHUDBackground_Warning", new Color(255, 0, 0) * 0.25f, pos, matrix.Left, matrix.Up, 0.004f, 0.016f);
 
                 iconBarEntities[id].Visible = false;
                 return;
