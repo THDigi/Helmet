@@ -38,6 +38,9 @@ namespace Digi.Helmet
             Log.SetUp("Helmet", 428842256);
         }
 
+        // HACK workaround, remove after stable is updated past v01.172
+        public static bool tempCompatibilityCheck = false;
+
         private const string MOD_DEV_NAME = "Helmet.dev";
         private const int WORKSHOP_DEV_ID = 429601133;
 
@@ -235,6 +238,8 @@ namespace Digi.Helmet
         public void Init()
         {
             Log.Init();
+            
+            tempCompatibilityCheck = (short)MathHelper.Floor(MyAPIGateway.Session.GetCheckpoint(null).AppVersion / 1000f) == 1172;
 
             instance = this;
             init = true;
@@ -1553,13 +1558,13 @@ namespace Digi.Helmet
                                 }
 
                                 color *= alpha;
-                                MyTransparentGeometry.AddBillboardOriented(settings.defaultElements[id].material, color, matrix.Translation, matrix.Left, matrix.Down, 0.0025f);
+                                Extensions.TempAddBillboardOriented(settings.defaultElements[id].material, color, matrix.Translation, matrix, 0.0025f);
                                 break;
                             case Icons.WARNING:
                                 if(show)
                                 {
                                     if(warningBlinkOn)
-                                        MyTransparentGeometry.AddBillboardOriented("HelmetHUDIcon_Warning", Color.White * alpha, matrix.Translation, matrix.Left, matrix.Down, 0.0075f);
+                                        Extensions.TempAddBillboardOriented("HelmetHUDIcon_Warning", Color.White * alpha, matrix.Translation, matrix, 0.0075f);
                                 }
                                 else
                                 {
@@ -1610,7 +1615,7 @@ namespace Digi.Helmet
                 var posRgid = cameraMatrix.Translation + cameraMatrix.Forward * 0.1;
                 var pos = (animationStart > 0 ? posHUD : Vector3D.Lerp(posRgid, posHUD, settings.crosshairSwayRatio));
 
-                MyTransparentGeometry.AddBillboardOriented(settings.crosshairTypes[settings.crosshairType], settings.crosshairColor, pos, matrix.Left, matrix.Down, settings.crosshairScale / 100f);
+                Extensions.TempAddBillboardOriented(settings.crosshairTypes[settings.crosshairType], settings.crosshairColor, pos, matrix, settings.crosshairScale / 100f);
                 return;
             }
 
@@ -1648,13 +1653,13 @@ namespace Digi.Helmet
                         var dist = (float)dir.Normalize();
                         var pos = camPos + dir * MARKER_DISTANCE_CAMERA;
 
-                        MyTransparentGeometry.AddBillboardOriented("HelmetMarker", settings.markerColorGPS * ICON_ALPHA, pos, matrix.Left, matrix.Down, MARKER_SIZE * settings.markerScale);
+                        Extensions.TempAddBillboardOriented("HelmetMarker", settings.markerColorGPS * ICON_ALPHA, pos, matrix, MARKER_SIZE * settings.markerScale);
 
                         var dot = dir.Dot(camMatrix.Forward);
 
                         if(dot >= AIM_ACCURACY)
                         {
-                            MyTransparentGeometry.AddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix.Left, matrix.Down, MARKER_SIZE * settings.markerScale * 1.2f);
+                            Extensions.TempAddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix, MARKER_SIZE * settings.markerScale * 1.2f);
 
                             tmp.Clear();
                             tmp.Append(DISPLAY_PAD);
@@ -1686,7 +1691,7 @@ namespace Digi.Helmet
                         var dist = (float)dir.Normalize();
                         var pos = camPos + dir * MARKER_DISTANCE_CAMERA;
 
-                        MyTransparentGeometry.AddBillboardOriented("HelmetMarker", kv.Value.color * ICON_ALPHA, pos, matrix.Left, matrix.Down, kv.Value.size * settings.markerScale);
+                        Extensions.TempAddBillboardOriented("HelmetMarker", kv.Value.color * ICON_ALPHA, pos, matrix, kv.Value.size * settings.markerScale);
 
                         // TODO speed arrow?
                         //var block = ent as IMyCubeBlock;
@@ -1746,7 +1751,7 @@ namespace Digi.Helmet
 
                         if(dot >= AIM_ACCURACY)
                         {
-                            MyTransparentGeometry.AddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix.Left, matrix.Down, kv.Value.size * settings.markerScale * 1.2f);
+                            Extensions.TempAddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix, kv.Value.size * settings.markerScale * 1.2f);
 
                             tmp.Clear();
                             tmp.Append(DISPLAY_PAD);
@@ -3677,6 +3682,15 @@ namespace Digi.Helmet
                 return MyRelationsBetweenPlayers.Neutral;
 
             return MyRelationsBetweenPlayers.Enemies;
+        }
+
+        // HACK temporary workaround to my matrix being weirdly aligned
+        public static void TempAddBillboardOriented(string material, Vector4 color, Vector3D origin, MatrixD matrix, float radius)
+        {
+            if(Helmet.tempCompatibilityCheck)
+                MyTransparentGeometry.AddBillboardOriented(material, color, origin, matrix.Down, matrix.Left, radius);
+            else
+                MyTransparentGeometry.AddBillboardOriented(material, color, origin, matrix.Left, matrix.Down, radius);
         }
     }
 
