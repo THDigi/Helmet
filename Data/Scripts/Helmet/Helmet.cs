@@ -38,9 +38,6 @@ namespace Digi.Helmet
             Log.SetUp("Helmet", 428842256);
         }
 
-        // HACK workaround, remove after stable is updated past v01.172
-        public static bool tempCompatibilityCheck = false;
-
         private const string MOD_DEV_NAME = "Helmet.dev";
         private const int WORKSHOP_DEV_ID = 429601133;
 
@@ -152,7 +149,8 @@ namespace Digi.Helmet
         private static readonly Color HUD_GREEN = new Color(0, (int)(255 * HUD_COLOR_SCALE), (int)(33 * HUD_COLOR_SCALE));
         private static readonly Color HUD_GRAY = new Color((int)(128 * HUD_COLOR_SCALE), (int)(128 * HUD_COLOR_SCALE), (int)(128 * HUD_COLOR_SCALE));
         private static readonly Color HUD_DARKGRAY = new Color((int)(64 * HUD_COLOR_SCALE), (int)(64 * HUD_COLOR_SCALE), (int)(64 * HUD_COLOR_SCALE));
-        private const string HUD_TEXTURE = "SquareIgnoreDepth";
+        private static readonly MyStringId MATERIAL_HUD = MyStringId.GetOrCompute("SquareIgnoreDepth");
+        private static readonly MyStringId MATERIAL_BAR_WARNING_BG = MyStringId.GetOrCompute("HelmetHUDBackground_Warning");
 
         private const float MARKER_SIZE = 0.0002f;
 
@@ -238,8 +236,6 @@ namespace Digi.Helmet
         public void Init()
         {
             Log.Init();
-            
-            tempCompatibilityCheck = (short)MathHelper.Floor(MyAPIGateway.Session.GetCheckpoint(null).AppVersion / 1000f) == 1172;
 
             instance = this;
             init = true;
@@ -627,8 +623,9 @@ namespace Digi.Helmet
                             var charRadio = characterEntity.Components.Get<MyDataReceiver>();
                             bool charOrCockpit = (controlled is IMyCharacter || controlled is IMyCockpit);
 
-                            if(charOrCockpit)
-                                charRadio.UpdateBroadcastersInRange();
+                            // DEBUG copied from the vanilla game, not sure why this was a condition...
+                            //if(charOrCockpit)
+                            charRadio.UpdateBroadcastersInRange();
 
                             foreach(MyDataBroadcaster current in charRadio.RelayedBroadcasters)
                             {
@@ -637,7 +634,7 @@ namespace Digi.Helmet
                                 if(ent == null)
                                     continue;
 
-                                if(!charOrCockpit && ent.EntityId == characterEntity.EntityId)
+                                if(charOrCockpit && ent == characterEntity)
                                     continue; // do not show myself
 
                                 var size = MARKER_SIZE;
@@ -731,6 +728,7 @@ namespace Digi.Helmet
                                     if(ant.HasLocalPlayerAccess())
                                     {
                                         var terminalSystem = MyAPIGateway.TerminalActionsHelper.GetTerminalSystemForGrid(ant.CubeGrid as IMyCubeGrid);
+                                        //var yourFaction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(MyAPIGateway.Session.Player.IdentityId);
 
                                         terminalSystem.GetBlocksOfType<IMyTerminalBlock>(new List<IMyTerminalBlock>(), delegate (IMyTerminalBlock b)
                                                                                          {
@@ -744,13 +742,29 @@ namespace Digi.Helmet
                                                                                                  if(hudEntityMarkers.ContainsKey(b))
                                                                                                      return false;
 
-                                                                                                 string n = b.CustomName;
+                                                                                                 string n = null;
                                                                                                  var cockpit = b as MyCockpit;
 
                                                                                                  if(cockpit != null && cockpit.Pilot != null)
                                                                                                  {
-                                                                                                     n = (cockpit.Pilot as IMyCharacter).DisplayName; // TODO get faction tag?
+                                                                                                     var pilot = (IMyCharacter)cockpit.Pilot;
+
+                                                                                                     if(pilot.ControllerInfo != null)
+                                                                                                     {
+                                                                                                         var faction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(pilot.ControllerInfo.ControllingIdentityId);
+
+                                                                                                         // TODO relation color?
+                                                                                                         //MyAPIGateway.Session.Factions.GetRelationBetweenFactions(faction.FactionId, 
+
+                                                                                                         if(faction != null)
+                                                                                                             n = faction.Tag + ". " + pilot.DisplayName;
+                                                                                                     }
+
+                                                                                                     if(n == null)
+                                                                                                         n = pilot.DisplayName;
                                                                                                  }
+                                                                                                 else
+                                                                                                     n = b.CustomName;
 
                                                                                                  hudEntityMarkers.Add(b, new HelmetHudMarker(n, settings.markerColorBlock, size / 2));
                                                                                              }
@@ -1493,11 +1507,11 @@ namespace Digi.Helmet
                 }
 
                 hudElementData[id].show = showIcon;
-                DrawIcon(headPos, id, showIcon);
+                DrawElement(headPos, id, showIcon);
             }
         }
 
-        private void DrawIcon(Vector3D headPos, int id, bool show)
+        private void DrawElement(Vector3D headPos, int id, bool show)
         {
             var elementData = hudElementData[id];
             var elementSettings = settings.elements[id];
@@ -1508,7 +1522,7 @@ namespace Digi.Helmet
             {
                 float tickDiff = (float)Math.Min((DateTime.UtcNow.Ticks - animationStart) / (TimeSpan.TicksPerMillisecond * settings.animateTime * 1000), 1);
                 var toMatrix = MatrixD.CreateWorld(matrix.Translation + matrix.Up * 0.5, matrix.Up, matrix.Backward);
-                matrix = (characterEntity as IMyControllableEntity).EnabledHelmet ? MatrixD.Slerp(toMatrix, matrix, tickDiff) : MatrixD.Slerp(matrix, toMatrix, tickDiff);
+                matrix = (characterEntity.EnabledHelmet ? MatrixD.Slerp(toMatrix, matrix, tickDiff) : MatrixD.Slerp(matrix, toMatrix, tickDiff));
             }
 
             switch(id)
@@ -1564,7 +1578,7 @@ namespace Digi.Helmet
                                 if(show)
                                 {
                                     if(warningBlinkOn)
-                                        Extensions.TempAddBillboardOriented("HelmetHUDIcon_Warning", Color.White * alpha, matrix.Translation, matrix, 0.0075f);
+                                        Extensions.TempAddBillboardOriented(settings.defaultElements[id].material, Color.White * alpha, matrix.Translation, matrix, 0.0075f);
                                 }
                                 else
                                 {
@@ -1615,7 +1629,7 @@ namespace Digi.Helmet
                 var posRgid = cameraMatrix.Translation + cameraMatrix.Forward * 0.1;
                 var pos = (animationStart > 0 ? posHUD : Vector3D.Lerp(posRgid, posHUD, settings.crosshairSwayRatio));
 
-                Extensions.TempAddBillboardOriented(settings.crosshairTypes[settings.crosshairType], settings.crosshairColor, pos, matrix, settings.crosshairScale / 100f);
+                Extensions.TempAddBillboardOriented(settings.crosshairTypeId, settings.crosshairColor, pos, matrix, settings.crosshairScale / 100f);
                 return;
             }
 
@@ -1638,6 +1652,7 @@ namespace Digi.Helmet
                 const double MARKER_DISTANCE_CAMERA = 0.01;
                 const float ICON_ALPHA = 1f;
                 const double AIM_ACCURACY = 0.999;
+                var markerMaterial = settings.defaultElements[id].material;
 
                 selectedSort.Clear();
 
@@ -1653,13 +1668,13 @@ namespace Digi.Helmet
                         var dist = (float)dir.Normalize();
                         var pos = camPos + dir * MARKER_DISTANCE_CAMERA;
 
-                        Extensions.TempAddBillboardOriented("HelmetMarker", settings.markerColorGPS * ICON_ALPHA, pos, matrix, MARKER_SIZE * settings.markerScale);
+                        Extensions.TempAddBillboardOriented(markerMaterial, settings.markerColorGPS * ICON_ALPHA, pos, matrix, MARKER_SIZE * settings.markerScale);
 
                         var dot = dir.Dot(camMatrix.Forward);
 
                         if(dot >= AIM_ACCURACY)
                         {
-                            Extensions.TempAddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix, MARKER_SIZE * settings.markerScale * 1.2f);
+                            Extensions.TempAddBillboardOriented(markerMaterial, Color.Gold, pos, matrix, MARKER_SIZE * settings.markerScale * 1.2f);
 
                             tmp.Clear();
                             tmp.Append(DISPLAY_PAD);
@@ -1691,7 +1706,7 @@ namespace Digi.Helmet
                         var dist = (float)dir.Normalize();
                         var pos = camPos + dir * MARKER_DISTANCE_CAMERA;
 
-                        Extensions.TempAddBillboardOriented("HelmetMarker", kv.Value.color * ICON_ALPHA, pos, matrix, kv.Value.size * settings.markerScale);
+                        Extensions.TempAddBillboardOriented(markerMaterial, kv.Value.color * ICON_ALPHA, pos, matrix, kv.Value.size * settings.markerScale);
 
                         // TODO speed arrow?
                         //var block = ent as IMyCubeBlock;
@@ -1751,7 +1766,7 @@ namespace Digi.Helmet
 
                         if(dot >= AIM_ACCURACY)
                         {
-                            Extensions.TempAddBillboardOriented("HelmetMarker", Color.Gold, pos, matrix, kv.Value.size * settings.markerScale * 1.2f);
+                            Extensions.TempAddBillboardOriented(markerMaterial, Color.Gold, pos, matrix, kv.Value.size * settings.markerScale * 1.2f);
 
                             tmp.Clear();
                             tmp.Append(DISPLAY_PAD);
@@ -1896,7 +1911,7 @@ namespace Digi.Helmet
                 int sphereQuality = sphereQualityIndex[(int)settings.hudQuality];
 
                 if(sphereQuality > 0)
-                    MySimpleObjectDraw.DrawTransparentSphere(ref matrix, 0.004f, ref sphereColor, MySimpleObjectRasterizer.Solid, sphereQuality, HUD_TEXTURE, null);
+                    MySimpleObjectDraw.DrawTransparentSphere(ref matrix, 0.004f, ref sphereColor, MySimpleObjectRasterizer.Solid, sphereQuality, MATERIAL_HUD, null);
 
                 bool inGravity = gravityForce >= 0.01f;
                 bool isMoving = velLength >= 0.01f;
@@ -1944,13 +1959,13 @@ namespace Digi.Helmet
                         color.A = CONE_ALPHA;
                         var dot = MyAPIGateway.Session.Camera.WorldMatrix.Forward.Dot(gravityDir);
 
-                        MySimpleObjectDraw.DrawTransparentCone(ref matrixGravity, CONE_RADIUS, CONE_HEIGHT, ref color, arrowQuality, HUD_TEXTURE);
+                        MySimpleObjectDraw.DrawTransparentCone(ref matrixGravity, CONE_RADIUS, CONE_HEIGHT, ref color, arrowQuality, MATERIAL_HUD);
 
                         if(dot > CONE_LINE_ANGLEDOT)
                         {
                             var lineColor = color * (1 - ((float)Math.Min(dot, 0) / (float)CONE_LINE_ANGLEDOT));
                             matrixGravity = MatrixD.CreateWorld(matrix.Translation + matrixGravity.Backward * (CONE_LINE_HEIGHT / 2), matrixGravity.Right, matrixGravity.Backward);
-                            MySimpleObjectDraw.DrawTransparentCapsule(ref matrixGravity, CONE_LINE_RADIUS * Math.Min((float)zScale, 1), CONE_LINE_HEIGHT * (float)zScale, ref lineColor, arrowQuality, HUD_TEXTURE);
+                            MySimpleObjectDraw.DrawTransparentCapsule(ref matrixGravity, CONE_LINE_RADIUS * Math.Min((float)zScale, 1), CONE_LINE_HEIGHT * (float)zScale, ref lineColor, arrowQuality, MATERIAL_HUD);
                         }
                     }
 
@@ -1973,13 +1988,13 @@ namespace Digi.Helmet
                         color.A = CONE_ALPHA;
                         var dot = MyAPIGateway.Session.Camera.WorldMatrix.Forward.Dot(velDir);
 
-                        MySimpleObjectDraw.DrawTransparentCone(ref matrixVelocity, CONE_RADIUS, CONE_HEIGHT, ref color, arrowQuality, HUD_TEXTURE);
+                        MySimpleObjectDraw.DrawTransparentCone(ref matrixVelocity, CONE_RADIUS, CONE_HEIGHT, ref color, arrowQuality, MATERIAL_HUD);
 
                         if(dot > CONE_LINE_ANGLEDOT)
                         {
                             var lineColor = color * (1 - ((float)Math.Min(dot, 0) / (float)CONE_LINE_ANGLEDOT));
                             matrixVelocity = MatrixD.CreateWorld(matrix.Translation + matrixVelocity.Backward * (CONE_LINE_HEIGHT / 2), matrixVelocity.Right, matrixVelocity.Backward);
-                            MySimpleObjectDraw.DrawTransparentCapsule(ref matrixVelocity, CONE_LINE_RADIUS * Math.Min((float)zScale, 1), CONE_LINE_HEIGHT * (float)zScale, ref lineColor, arrowQuality, HUD_TEXTURE);
+                            MySimpleObjectDraw.DrawTransparentCapsule(ref matrixVelocity, CONE_LINE_RADIUS * Math.Min((float)zScale, 1), CONE_LINE_HEIGHT * (float)zScale, ref lineColor, arrowQuality, MATERIAL_HUD);
                         }
                     }
                 }
@@ -2074,14 +2089,13 @@ namespace Digi.Helmet
                 return;
             }
 
-            // if warning icon is shown and the blink state is on and this bar is below the warning percent then add a red background
+            // blink this element in sync with the warning icon if its under the warning percent
             if(warningBlinkOn && elementData.value <= elementSettings.warnPercent && hudElementData[Icons.WARNING].show)
             {
-                // DEBUG test?
-                //var pos = matrix.Translation + (settings.elements[id].flipHorizontal ? matrix.Right : matrix.Left) * 0.00325;
-                //MyTransparentGeometry.AddBillboardOriented("HelmetHUDBackground_Warning", new Color(255, 0, 0) * 0.25f, pos, matrix.Left, matrix.Up, 0.004f, 0.016f);
+                var pos = matrix.Translation + (settings.elements[id].flipHorizontal ? matrix.Right : matrix.Left) * 0.00325;
+                MyTransparentGeometry.AddBillboardOriented(MATERIAL_BAR_WARNING_BG, new Color(255, 0, 0) * 0.25f, pos, matrix.Left, matrix.Up, 0.016f, 0.004f);
 
-                iconBarEntities[id].Visible = false;
+                //iconBarEntities[id].Visible = false;
                 return;
             }
 
@@ -2285,7 +2299,7 @@ namespace Digi.Helmet
                     continue;
 
                 var dir = planet.PositionComp.GetPosition() - point;
-                var gravComp = planet.Components.Get<MyGravityProviderComponent>() as MySphericalNaturalGravityComponent;
+                var gravComp = (MySphericalNaturalGravityComponent)planet.Components.Get<MyGravityProviderComponent>();
 
                 if(dir.LengthSquared() <= gravComp.GravityLimitSq)
                 {
@@ -2309,8 +2323,7 @@ namespace Digi.Helmet
 
                 if(flat != null)
                 {
-                    // HACK flat.FieldSize returned itself, had to use a workaround.
-                    var box = new MyOrientedBoundingBoxD(flat.WorldMatrix.Translation, new Vector3(flat.FieldWidth, flat.FieldHeight, flat.FieldDepth) / 2, Quaternion.CreateFromRotationMatrix(flat.WorldMatrix));
+                    var box = new MyOrientedBoundingBoxD(flat.WorldMatrix.Translation, flat.FieldSize / 2, Quaternion.CreateFromRotationMatrix(flat.WorldMatrix));
 
                     if(box.Contains(ref point))
                         artificialDir += flat.WorldMatrix.Down * (flat.GravityAcceleration / G_ACCELERATION);
@@ -2368,18 +2381,18 @@ namespace Digi.Helmet
                     if(msg.Length == 0)
                     {
                         fov = MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView);
-                        MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Your FOV is: " + fov);
+                        MyVisualScriptLogicProvider.SendChatMessage("Your FOV is: " + fov, MOD_NAME, 0, MyFontEnum.Blue);
                     }
                     else if(!float.TryParse(msg, out fov))
                     {
-                        MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Invalid float number: " + msg);
+                        MyVisualScriptLogicProvider.SendChatMessage("Invalid float number: " + msg, MOD_NAME, 0, MyFontEnum.Red);
                     }
 
                     if(fov > 0)
                     {
                         settings.ScaleForFOV(fov);
                         settings.Save();
-                        MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "HUD and helmet scale set to " + settings.scale + "; saved to config.");
+                        MyVisualScriptLogicProvider.SendChatMessage("HUD and helmet scale set to " + settings.scale + "; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     }
 
                     return;
@@ -2390,7 +2403,7 @@ namespace Digi.Helmet
 
                     if(msg.Length == 0)
                     {
-                        MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Scale = " + settings.scale);
+                        MyVisualScriptLogicProvider.SendChatMessage("Scale = " + settings.scale, MOD_NAME, 0, MyFontEnum.Blue);
                         return;
                     }
 
@@ -2401,7 +2414,7 @@ namespace Digi.Helmet
                         scale = Math.Min(Math.Max(scale, Settings.MIN_SCALE), Settings.MAX_SCALE);
                         settings.scale = scale;
                         settings.Save();
-                        MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Scale set to " + scale + "; saved to config.");
+                        MyVisualScriptLogicProvider.SendChatMessage("Scale set to " + scale + "; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     }
                     else
                     {
@@ -2416,7 +2429,7 @@ namespace Digi.Helmet
 
                     if(msg.Length == 0)
                     {
-                        MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "HUD scale = " + settings.scale);
+                        MyVisualScriptLogicProvider.SendChatMessage("HUD scale = " + settings.scale, MOD_NAME, 0, MyFontEnum.Blue);
                         return;
                     }
 
@@ -2427,37 +2440,39 @@ namespace Digi.Helmet
                         scale = Math.Min(Math.Max(scale, Settings.MIN_HUDSCALE), Settings.MAX_HUDSCALE);
                         settings.hudScale = scale;
                         settings.Save();
-                        MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "HUD scale set to " + scale + "; saved to config.");
+                        MyVisualScriptLogicProvider.SendChatMessage("HUD scale set to " + scale + "; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     }
                     else
-                        MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Invalid float number: " + msg);
+                    {
+                        MyVisualScriptLogicProvider.SendChatMessage("Invalid float number: " + msg, MOD_NAME, 0, MyFontEnum.Red);
+                    }
 
                     return;
                 }
                 else if(msg.StartsWith("off", StringComparison.Ordinal))
                 {
-                    MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Turned OFF; saved to config.");
+                    MyVisualScriptLogicProvider.SendChatMessage("Turned OFF; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     settings.enabled = false;
                     settings.Save();
                     return;
                 }
                 else if(msg.StartsWith("on", StringComparison.Ordinal))
                 {
-                    MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Turned ON; saved to config.");
+                    MyVisualScriptLogicProvider.SendChatMessage("Turned ON; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     settings.enabled = true;
                     settings.Save();
                     return;
                 }
                 else if(msg.StartsWith("hud off", StringComparison.Ordinal))
                 {
-                    MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "HUD turned OFF; saved to config.");
+                    MyVisualScriptLogicProvider.SendChatMessage("HUD turned OFF; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     settings.hud = false;
                     settings.Save();
                     return;
                 }
                 else if(msg.StartsWith("hud on", StringComparison.Ordinal))
                 {
-                    MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "HUD turned ON; saved to config.");
+                    MyVisualScriptLogicProvider.SendChatMessage("HUD turned ON; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     settings.hud = true;
                     settings.Save();
                     return;
@@ -2465,9 +2480,9 @@ namespace Digi.Helmet
                 else if(msg.StartsWith("reload", StringComparison.Ordinal))
                 {
                     if(settings.Load())
-                        MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Reloaded and re-saved config.");
+                        MyVisualScriptLogicProvider.SendChatMessage("Reloaded and re-saved config.", MOD_NAME, 0, MyFontEnum.Green);
                     else
-                        MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Config created with the current settings.");
+                        MyVisualScriptLogicProvider.SendChatMessage("Config created with the current settings.", MOD_NAME, 0, MyFontEnum.Green);
 
                     settings.Save();
 
@@ -2482,7 +2497,7 @@ namespace Digi.Helmet
                 }
                 else if(msg.StartsWith("glass off", StringComparison.Ordinal))
                 {
-                    MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Glass reflections turned OFF; saved to config.");
+                    MyVisualScriptLogicProvider.SendChatMessage("Glass reflections turned OFF; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     settings.glassReflections = false;
                     settings.Save();
                     RemoveHelmet();
@@ -2490,7 +2505,7 @@ namespace Digi.Helmet
                 }
                 else if(msg.StartsWith("glass on", StringComparison.Ordinal))
                 {
-                    MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "Glass reflections turned ON; saved to config.");
+                    MyVisualScriptLogicProvider.SendChatMessage("Glass reflections turned ON; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     settings.glassReflections = true;
                     settings.Save();
                     RemoveHelmet();
@@ -2498,7 +2513,7 @@ namespace Digi.Helmet
                 }
                 else if(msg.StartsWith("lcd off", StringComparison.Ordinal))
                 {
-                    MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "LCD turned OFF; saved to config.");
+                    MyVisualScriptLogicProvider.SendChatMessage("LCD turned OFF; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     settings.elements[Icons.DISPLAY].show = 0;
                     settings.Save();
                     RemoveHelmet();
@@ -2506,7 +2521,7 @@ namespace Digi.Helmet
                 }
                 else if(msg.StartsWith("lcd on", StringComparison.Ordinal))
                 {
-                    MyAPIGateway.Utilities.ShowMessage(MOD_NAME, "LCD turned ON; saved to config.");
+                    MyVisualScriptLogicProvider.SendChatMessage("LCD turned ON; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     settings.elements[Icons.DISPLAY].show = 3;
                     settings.Save();
                     RemoveHelmet();
@@ -2675,14 +2690,18 @@ namespace Digi.Helmet
 
                     prevSpeed = speed;
                     string unit = "m/s";
+                    string accelUnit = "m/s²";
 
                     if(settings.displaySpeedUnit == SpeedUnits.kph)
                     {
                         speed *= 3.6f;
                         unit = "km/h";
+
+                        accel *= 3.6f;
+                        accelUnit = "km/h²";
                     }
 
-                    str.Append(DISPLAY_PAD).Append("Speed: ").Append(speed.ToString(FLOAT_FORMAT)).Append(unit).Append(" (").Append(accelSymbol).Append(accel.ToString(FLOAT_FORMAT)).Append(unit).Append(")").AppendLine();
+                    str.Append(DISPLAY_PAD).Append("Speed: ").Append(speed.ToString(FLOAT_FORMAT)).Append(unit).Append(" (").Append(accelSymbol).Append(accel.ToString(FLOAT_FORMAT)).Append(accelUnit).Append(")").AppendLine();
 
                     str.Append(DISPLAY_PAD).Append("Altitude: ");
 
@@ -3685,12 +3704,9 @@ namespace Digi.Helmet
         }
 
         // HACK temporary workaround to my matrix being weirdly aligned
-        public static void TempAddBillboardOriented(string material, Vector4 color, Vector3D origin, MatrixD matrix, float radius)
+        public static void TempAddBillboardOriented(MyStringId material, Vector4 color, Vector3D origin, MatrixD matrix, float radius)
         {
-            if(Helmet.tempCompatibilityCheck)
-                MyTransparentGeometry.AddBillboardOriented(material, color, origin, matrix.Down, matrix.Left, radius);
-            else
-                MyTransparentGeometry.AddBillboardOriented(material, color, origin, matrix.Left, matrix.Down, radius);
+            MyTransparentGeometry.AddBillboardOriented(material, color, origin, matrix.Left, matrix.Down, radius);
         }
     }
 

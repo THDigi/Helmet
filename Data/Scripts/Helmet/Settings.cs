@@ -5,6 +5,7 @@ using System.Text;
 using System.IO;
 using Sandbox.ModAPI;
 using VRageMath;
+using VRage.Utils;
 
 namespace Digi.Helmet
 {
@@ -19,7 +20,7 @@ namespace Digi.Helmet
         public int warnPercent = -1;
         public int warnMoveMode = 0;
         public int hudMode = 0;
-        public string material = null;
+        public MyStringId material = MyStringId.NullOrEmpty;
 
         public HudElement(string name)
         {
@@ -99,13 +100,14 @@ namespace Digi.Helmet
         public Color statusIconSetOnColor = new Color(0, 255, 0);
         public Color statusIconOffColor = new Color(255, 0, 0);
         public Color statusIconSetOffColor = new Color(255, 120, 0);
-        
+
         // TODO feature: lights
         //public byte lightReplace = 1;
         //public byte lightBeams = 2;
         //public byte lightDustParticles = 2;
 
         public string crosshairType = "extended";
+        public MyStringId crosshairTypeId; // automatically assigned
         public Color crosshairColor = new Color(0, 55, 255);
         public float crosshairScale = 0.75f;
         public float crosshairSwayRatio = 0.1f;
@@ -139,29 +141,29 @@ namespace Digi.Helmet
         public HudElement[] elements;
         public HudElement[] defaultElements = new HudElement[TOTAL_ELEMENTS]
         {
-            new HudElement("warning") { posLeft = 0, posUp = 0.035, },
+            new HudElement("warning") { posLeft = 0, posUp = 0.035, material = MyStringId.GetOrCompute("HelmetHUDIcon_Warning"), },
             new HudElement("health") { posLeft = 0.085, posUp = -0.062, hasBar = true, warnPercent = 15, },
             new HudElement("energy") { posLeft = -0.085, posUp = -0.058, hasBar = true, warnPercent = 15, flipHorizontal = true, },
             new HudElement("oxygen") { posLeft = -0.08, posUp = -0.066, hasBar = true, warnPercent = 15, flipHorizontal = true, },
             new HudElement("oxygenenv") { posLeft = -0.08, posUp = -0.066, },
-            new HudElement("hydrogen") { posLeft = -0.075, posUp = -0.074, hasBar = true, warnPercent = 15, warnMoveMode = 2, flipHorizontal = true, },
+            new HudElement("hydrogen") { posLeft = -0.075, posUp = -0.074, hasBar = true, warnPercent = 20, warnMoveMode = 2, flipHorizontal = true, },
             new HudElement("inventory") { posLeft = 0.075, posUp = -0.07, hasBar = true, },
-            new HudElement("thrusters") { posLeft = 0.084, posUp = -0.077, material = "HelmetHUDIcon_Thrusters", },
-            new HudElement("dampeners") { posLeft = 0.078, posUp = -0.076, material = "HelmetHUDIcon_Dampeners", },
-            new HudElement("lights") { posLeft = 0.072, posUp = -0.075, material = "HelmetHUDIcon_Lights", },
-            new HudElement("broadcasting") { posLeft = 0.066, posUp = -0.074, material = "HelmetHUDIcon_Broadcasting", },
+            new HudElement("thrusters") { posLeft = 0.084, posUp = -0.077, material = MyStringId.GetOrCompute("HelmetHUDIcon_Thrusters"), },
+            new HudElement("dampeners") { posLeft = 0.078, posUp = -0.076, material = MyStringId.GetOrCompute("HelmetHUDIcon_Dampeners"), },
+            new HudElement("lights") { posLeft = 0.072, posUp = -0.075, material = MyStringId.GetOrCompute("HelmetHUDIcon_Lights"), },
+            new HudElement("broadcasting") { posLeft = 0.066, posUp = -0.074, material = MyStringId.GetOrCompute("HelmetHUDIcon_Broadcasting"), },
             new HudElement("vector") { posLeft = 0, posUp = -0.048, },
             new HudElement("display") { show = 3, hudMode = 2, posLeft = 0, posUp = -0.07, },
             new HudElement("horizon") { hudMode = 2, hasBar = true, },
             new HudElement("crosshair") { hudMode = 2, },
-            new HudElement("markers") { hudMode = 2, },
+            new HudElement("markers") { hudMode = 2, material = MyStringId.GetOrCompute("HelmetMarker") },
         };
 
-        public Dictionary<string, string> crosshairTypes = new Dictionary<string, string>()
+        public Dictionary<string, MyStringId> crosshairTypes = new Dictionary<string, MyStringId>()
         {
-            { "vanilla", "HelmetCrosshairVanilla" },
-            { "extended", "HelmetCrosshairExtended" },
-            { "dot", "HelmetCrosshairDot" },
+            { "vanilla", MyStringId.GetOrCompute("HelmetCrosshairVanilla") },
+            { "extended", MyStringId.GetOrCompute("HelmetCrosshairExtended") },
+            { "dot", MyStringId.GetOrCompute("HelmetCrosshairDot") },
         };
 
         public const double MIN_SCALE = -1.0f;
@@ -337,7 +339,10 @@ namespace Digi.Helmet
                             {
                                 case "type":
                                     if(crosshairTypes.ContainsKey(args[1]))
+                                    {
                                         crosshairType = args[1];
+                                        crosshairTypeId = crosshairTypes[args[1]];
+                                    }
                                     else
                                         Log.Error("Invalid " + args[0] + " value: " + args[1]);
                                     continue;
@@ -686,7 +691,7 @@ namespace Digi.Helmet
                 str.AppendLine("// Lines starting with // are comments");
                 str.AppendLine();
             }
-            
+
             str.Append("Enabled=").Append(boolToLower(enabled)).AppendLine(comments ? " // toggles the entire mod, default: true" : "");
             str.Append("HUD=").Append(boolToLower(hud)).AppendLine(comments ? " // toggles the HUD, default: true" : "");
             str.Append("HUDQuality=").Append(hudQuality).AppendLine(comments ? " // controls the quality of certain HUD elements, currently affects the vector indicator. Values: verylow, low, medum, high, ultra, default: high. Ultra is not noticeable comapred to high on 1080p" : "");
