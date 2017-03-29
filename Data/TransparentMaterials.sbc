@@ -8,7 +8,7 @@
 			<SubtypeId>HelmetVignette</SubtypeId>
 		</Id>
 		<Texture>Textures\Vignette.dds</Texture>
-		<SoftParticleDistanceScale>1</SoftParticleDistanceScale>
+		<SoftParticleDistanceScale>0</SoftParticleDistanceScale>
 		<CanBeAffectedByOtherLights>false</CanBeAffectedByOtherLights>
 		<AlphaMistingEnable>false</AlphaMistingEnable>
 		<IgnoreDepth>false</IgnoreDepth>
@@ -38,7 +38,7 @@
 			<SubtypeId>HelmetVignette_NoReflection</SubtypeId>
 		</Id>
 		<Texture>Textures\Vignette.dds</Texture>
-		<SoftParticleDistanceScale>1</SoftParticleDistanceScale>
+		<SoftParticleDistanceScale>0</SoftParticleDistanceScale>
 		<CanBeAffectedByOtherLights>false</CanBeAffectedByOtherLights>
 		<AlphaMistingEnable>false</AlphaMistingEnable>
 		<IgnoreDepth>false</IgnoreDepth>
@@ -68,7 +68,7 @@
 			<SubtypeId>HelmetVignette_Broken</SubtypeId>
 		</Id>
 		<Texture>Textures\VignetteBroken.dds</Texture>
-		<SoftParticleDistanceScale>1</SoftParticleDistanceScale>
+		<SoftParticleDistanceScale>0</SoftParticleDistanceScale>
 		<CanBeAffectedByOtherLights>false</CanBeAffectedByOtherLights>
 		<AlphaMistingEnable>false</AlphaMistingEnable>
 		<IgnoreDepth>false</IgnoreDepth>
@@ -98,7 +98,7 @@
 			<SubtypeId>HelmetHUD</SubtypeId>
 		</Id>
 		<Texture>Textures\HelmetHUD.dds</Texture>
-		<SoftParticleDistanceScale>1</SoftParticleDistanceScale>
+		<SoftParticleDistanceScale>0</SoftParticleDistanceScale>
 		<CanBeAffectedByOtherLights>false</CanBeAffectedByOtherLights>
 		<AlphaMistingEnable>false</AlphaMistingEnable>
 		<IgnoreDepth>false</IgnoreDepth>

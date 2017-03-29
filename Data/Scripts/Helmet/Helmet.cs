@@ -392,7 +392,8 @@ namespace Digi.Helmet
 
                 tick++; // global update tick
 
-                if(tick % 6 == 0)
+                // required here because it gets the previous value if used in HandleInput()
+                if(MyAPIGateway.Input.IsNewGameControlPressed(MyControlsSpace.TOGGLE_HUD))
                     vanillaHUD = !MyAPIGateway.Session.Config.MinimalHud;
 
                 HelmetLogicReturn ret = UpdateHelmetLogic();
