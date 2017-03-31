@@ -2097,7 +2097,7 @@ namespace Digi.Helmet
                 MyTransparentGeometry.AddBillboardOriented(MATERIAL_BAR_WARNING_BG, new Color(255, 0, 0) * 0.25f, pos, matrix.Left, matrix.Up, 0.016f, 0.004f);
 
                 //iconBarEntities[id].Visible = false;
-                return;
+                //return;
             }
 
             // calculate the bar size
