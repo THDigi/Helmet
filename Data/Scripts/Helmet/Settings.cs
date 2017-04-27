@@ -194,6 +194,8 @@ namespace Digi.Helmet
                 elements[i] = defaultElements[i].Copy();
             }
 
+            crosshairTypeId = crosshairTypes[crosshairType];
+
             // load the settings if they exist
             if(!Load())
             {
