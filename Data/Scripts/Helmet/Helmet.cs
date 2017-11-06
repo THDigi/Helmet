@@ -49,7 +49,11 @@ namespace Digi.Helmet
 
         public string pathToMod = "";
 
-        private IMyEntity helmet = null;
+        // DEBUG 'helmet' entity removed
+        //private IMyEntity helmet = null;
+        private bool drawVisor = false;
+
+        private IMyEntity ghostLCD = null; // shows HUD marker info centered; this is not the bottom display
         public IMyCharacter characterEntity = null;
         private MyCharacterDefinition characterDefinition = null;
         private bool characterHasHelmet = true;
@@ -60,7 +64,7 @@ namespace Digi.Helmet
         private long helmetBroken = 0;
         private bool prevHelmetOn = false;
         private long animationStart = 0;
-        private bool drawHelmet = false;
+        private bool drawHelmetAndHUD = false;
         private bool helmetOn = false;
         private bool inCockpit = false;
         private bool markerBlinkMemory = false;
@@ -364,8 +368,8 @@ namespace Digi.Helmet
 
             try
             {
-                if(drawHelmet)
-                    drawHelmet = false;
+                if(drawHelmetAndHUD)
+                    drawHelmetAndHUD = false;
 
                 if(isDedicatedHost)
                     return;
@@ -400,7 +404,7 @@ namespace Digi.Helmet
 
                 if(ret == HelmetLogicReturn.OK)
                 {
-                    drawHelmet = true;
+                    drawHelmetAndHUD = true;
                 }
                 else
                 {
@@ -420,6 +424,33 @@ namespace Digi.Helmet
             OK,
             REMOVE_ONLY_VIGNETTE,
             REMOVE_ALL,
+        }
+
+        private HashSet<MyDataBroadcaster> radioBroadcasters = new HashSet<MyDataBroadcaster>();
+        private HashSet<long> tmpEntitiesOnHUD = new HashSet<long>();
+        private List<IMyTerminalBlock> dummyTerminalList = new List<IMyTerminalBlock>(0); // always empty
+
+        // HACK: copied from MyAntennaSystem.GetAllRelayedBroadcasters(MyDataReceiver receiver, ...)
+        private void GetAllRelayedBroadcasters(MyDataReceiver receiver, long identityId, bool mutual, HashSet<MyDataBroadcaster> output = null)
+        {
+            if(output == null)
+            {
+                output = radioBroadcasters;
+                output.Clear();
+            }
+
+            foreach(MyDataBroadcaster current in receiver.BroadcastersInRange)
+            {
+                if(!output.Contains(current) && !current.Closed && (!mutual || (current.Receiver != null && receiver.Broadcaster != null && current.Receiver.BroadcastersInRange.Contains(receiver.Broadcaster))))
+                {
+                    output.Add(current);
+
+                    if(current.Receiver != null && current.CanBeUsedByPlayer(identityId))
+                    {
+                        GetAllRelayedBroadcasters(current.Receiver, identityId, mutual, output);
+                    }
+                }
+            }
         }
 
         private HelmetLogicReturn UpdateHelmetLogic()
@@ -495,19 +526,23 @@ namespace Digi.Helmet
             inCockpit = (MyAPIGateway.Session.CameraController is IMyCockpit);
             bool brokenHelmet = (helmetBroken > 0 && helmetBroken == characterEntity.EntityId);
 
+            if(helmetOn)
+                drawVisor = true;
+
+#if false // DEBUG 'helmet' entity removed
             if(helmetOn && brokenHelmet)
             {
                 helmetBroken = 0;
                 RemoveHelmet(removeHud: false); // don't return, only refresh helmet mesh
             }
-
+            
             if(helmetOn)
             {
                 // Spawn the helmet model if it's not spawned
                 if(brokenHelmet || (helmet == null && settings.helmetModel != null))
                 {
                     helmet = SpawnPrefab(CUBE_HELMET_PREFIX + (brokenHelmet ? CUBE_HELMET_BROKEN_SUFFIX : settings.GetHelmetModel()));
-
+            
                     if(helmet == null)
                     {
                         Log.Error("Couldn't load the helmet prefab!");
@@ -516,6 +551,7 @@ namespace Digi.Helmet
                     }
                 }
             }
+#endif
 
             if(settings.hud)
             {
@@ -622,13 +658,12 @@ namespace Digi.Helmet
                         if(settings.markerShowAntennas || settings.markerShowBeacons || settings.markerShowBlocks)
                         {
                             var charRadio = characterEntity.Components.Get<MyDataReceiver>();
-                            bool charOrCockpit = (controlled is IMyCharacter || controlled is IMyCockpit);
+                            var charOrCockpit = (controlled is IMyCharacter || controlled is IMyCockpit);
+                            var identityId = MyAPIGateway.Session.Player.IdentityId;
 
-                            // DEBUG copied from the vanilla game, not sure why this was a condition...
-                            //if(charOrCockpit)
-                            charRadio.UpdateBroadcastersInRange();
+                            GetAllRelayedBroadcasters(charRadio, identityId, false, null);
 
-                            foreach(MyDataBroadcaster current in charRadio.RelayedBroadcasters)
+                            foreach(MyDataBroadcaster current in radioBroadcasters)
                             {
                                 var ent = current.Entity as MyEntity;
 
@@ -827,6 +862,10 @@ namespace Digi.Helmet
 
         private void RemoveHelmet(bool removeHud = true)
         {
+            drawVisor = false;
+            animationStart = 0;
+
+#if false // DEBUG 'helmet' entity removed
             if(!removedHelmet)
             {
                 removedHelmet = true;
@@ -836,9 +875,9 @@ namespace Digi.Helmet
                     helmet.Visible = false;
                     helmet.Close();
                     helmet = null;
-                    animationStart = 0;
                 }
             }
+#endif
 
             if(removeHud && !removedHUD)
                 RemoveHud();
@@ -1126,8 +1165,6 @@ namespace Digi.Helmet
         }
         */
 
-        private IMyEntity ghostLCD = null;
-
         public override void Draw()
         {
             try
@@ -1138,7 +1175,7 @@ namespace Digi.Helmet
                 headMatrix = MyAPIGateway.Session.Camera.WorldMatrix;
                 SmoothHeadMatrix();
 
-                if(drawHelmet)
+                if(drawHelmetAndHUD)
                     DrawHelmet();
 
                 // TODO feature: lights
@@ -1406,13 +1443,26 @@ namespace Digi.Helmet
             }
         }
 
+        // HACK temporary
+        private readonly MyStringId MATERIAL_VIGNETTE = MyStringId.GetOrCompute("HelmetVignette");
+        private readonly MyStringId MATERIAL_VIGNETTE_SIDES = MyStringId.GetOrCompute("HelmetVignetteSides");
+        private readonly MyStringId MATERIAL_VIGNETTE_NOREFLECTION = MyStringId.GetOrCompute("HelmetVignette_NoReflection");
+        private readonly MyStringId MATERIAL_VIGNETTE_BROKEN = MyStringId.GetOrCompute("HelmetVignette_Broken");
+
         private void DrawHelmet()
         {
             // Align the helmet mesh
+
+#if false // DEBUG 'helmet' entity removed
             if(helmet != null)
+#endif
+            if(drawVisor)
             {
                 helmetMatrix = headMatrix;
-                helmetMatrix.Translation += headMatrix.Forward * (SCALE_DIST_ADJUST * (1.0 - settings.scale));
+
+                // altered for the sprite technique
+                helmetMatrix.Translation += headMatrix.Forward * SCALE_DIST_ADJUST;
+                //helmetMatrix.Translation += headMatrix.Forward * (SCALE_DIST_ADJUST * (1.0 - settings.scale));
 
                 if(animationStart > 0)
                 {
@@ -1432,38 +1482,55 @@ namespace Digi.Helmet
                     helmetMatrix = (helmetOn ? MatrixD.Slerp(toMatrix, helmetMatrix, tickDiff) : MatrixD.Slerp(helmetMatrix, toMatrix, tickDiff));
                 }
 
-                // TODO testing billboard overlay instead of mesh
-                //float size = (float)Dev.GetValueScroll("size", 0.1, 0.01, MyKeys.D3);
-                //float reflection = (float)Dev.GetValueScroll("reflection", 0.2, 0.01, MyKeys.D1);
-                //MyTransparentGeometry.AddBillboardOriented("HelmetVignette", Color.White, helmetMatrix.Translation, helmetMatrix.Up, helmetMatrix.Right, size, 0, true, -1, reflection);
+                // HACK temporary solution on the visor interaction issue
+                float height = 2.25f * SCALE_DIST_ADJUST; // eyeballed this value
+                float width = height * 1.45f; // calculated from the model height/width ratio
 
-                //not quite working - black texture and a vertex is badly positioned
-                //
-                //var p = helmetMatrix.Translation + helmetMatrix.Forward * 1;
-                //var uv = Vector2.One;
-                //{
-                //    var p0 = p + helmetMatrix.Left * size;
-                //    var p1 = p0 + helmetMatrix.Up * size;
-                //    var p2 = p + helmetMatrix.Right * size;
-                //    var n0 = Vector3.One;
-                //    var n1 = Vector3.One;
-                //    var n2 = Vector3.One;
-                //    //var n0 = p - helmetMatrix.Left * size;
-                //    //var n1 = n0 - helmetMatrix.Up * size;
-                //    //var n2 = p - helmetMatrix.Right * size;
-                //    MyTransparentGeometry.AddTriangleBillboard(p0, p1, p2, n0, n1, n2, uv, uv, uv, "HelmetVignette", -1, p, 0, true, false);
-                //}
-                //{
-                //    var p0 = p + helmetMatrix.Right * size;
-                //    var p1 = p0 + helmetMatrix.Up * size;
-                //    var p2 = p + helmetMatrix.Left * size;
-                //    var n0 = Vector3.One;
-                //    var n1 = Vector3.One;
-                //    var n2 = Vector3.One;
-                //    MyTransparentGeometry.AddTriangleBillboard(p0, p1, p2, n0, n1, n2, uv, uv, uv, "HelmetVignette", -1, p, 0, true, false);
-                //}
+                var cam = MyAPIGateway.Session.Camera;
+                var scaleFOV = (float)Math.Tan(MyAPIGateway.Session.Camera.FovWithZoom / 2);
+                var scaleVisor = (float)(scaleFOV * settings.visorScale);
+                width *= scaleVisor;
+                height *= scaleVisor;
 
-                helmet.SetWorldMatrix(helmetMatrix);
+                var p = helmetMatrix.Translation;
+                MyQuadD quad;
+                MyUtils.GenerateQuad(out quad, ref p, width, height, ref helmetMatrix);
+                uint parentId = 0; // characterEntity.Render.GetRenderObjectID();
+                bool brokenHelmet = (helmetBroken > 0 && helmetBroken == characterEntity.EntityId);
+                var helmetMaterial = (brokenHelmet ? MATERIAL_VIGNETTE_BROKEN : (settings.glassReflections ? MATERIAL_VIGNETTE : MATERIAL_VIGNETTE_NOREFLECTION));
+
+                {
+                    var p0 = quad.Point0;
+                    var p1 = quad.Point1;
+                    var p2 = quad.Point2;
+                    var n0 = helmetMatrix.Forward;
+                    var n1 = helmetMatrix.Forward;
+                    var n2 = helmetMatrix.Forward;
+                    var uv1 = new Vector2(0, 0);
+                    var uv2 = new Vector2(0, 1);
+                    var uv3 = new Vector2(1, 1);
+                    MyTransparentGeometry.AddTriangleBillboard(p0, p1, p2, n0, n1, n2, uv1, uv2, uv3, helmetMaterial, parentId, p);
+                }
+                {
+                    var p0 = quad.Point0;
+                    var p1 = quad.Point3;
+                    var p2 = quad.Point2;
+                    var n0 = helmetMatrix.Forward;
+                    var n1 = helmetMatrix.Forward;
+                    var n2 = helmetMatrix.Forward;
+                    var uv1 = new Vector2(0, 0);
+                    var uv2 = new Vector2(1, 0);
+                    var uv3 = new Vector2(1, 1);
+                    MyTransparentGeometry.AddTriangleBillboard(p0, p1, p2, n0, n1, n2, uv1, uv2, uv3, helmetMaterial, parentId, p);
+                }
+
+                var sideP = p + helmetMatrix.Backward * height;
+                MyTransparentGeometry.AddBillboardOriented(MATERIAL_VIGNETTE_SIDES, Color.Black, sideP + helmetMatrix.Left * width, helmetMatrix.Backward, helmetMatrix.Up, height, height);
+                MyTransparentGeometry.AddBillboardOriented(MATERIAL_VIGNETTE_SIDES, Color.Black, sideP + helmetMatrix.Right * width, helmetMatrix.Forward, helmetMatrix.Up, height, height);
+                MyTransparentGeometry.AddBillboardOriented(MATERIAL_VIGNETTE_SIDES, Color.Black, sideP + helmetMatrix.Up * height, helmetMatrix.Left, helmetMatrix.Forward, width, height);
+                MyTransparentGeometry.AddBillboardOriented(MATERIAL_VIGNETTE_SIDES, Color.Black, sideP + helmetMatrix.Down * height, helmetMatrix.Left, helmetMatrix.Backward, width, height);
+
+                //helmet.SetWorldMatrix(helmetMatrix);
                 removedHelmet = false;
             }
 
@@ -2214,7 +2281,7 @@ namespace Digi.Helmet
                 }
 
                 MyAPIGateway.Entities.RemapObjectBuilder(PrefabBuilder);
-                var ent = MyAPIGateway.Entities.CreateFromObjectBuilder(PrefabBuilder) as MyEntity;
+                var ent = (MyEntity)MyAPIGateway.Entities.CreateFromObjectBuilder(PrefabBuilder);
                 ent.IsPreview = true; // don't sync on MP
                 ent.SyncFlag = false; // don't sync on MP
                 ent.Save = false; // don't save this entity
@@ -2404,18 +2471,17 @@ namespace Digi.Helmet
 
                     if(msg.Length == 0)
                     {
-                        MyVisualScriptLogicProvider.SendChatMessage("Scale = " + settings.scale, MOD_NAME, 0, MyFontEnum.Blue);
+                        MyVisualScriptLogicProvider.SendChatMessage("Visor scale = " + settings.visorScale, MOD_NAME, 0, MyFontEnum.Blue);
                         return;
                     }
 
-                    double scale;
+                    double d;
 
-                    if(double.TryParse(msg, out scale))
+                    if(double.TryParse(msg, out d))
                     {
-                        scale = Math.Min(Math.Max(scale, Settings.MIN_SCALE), Settings.MAX_SCALE);
-                        settings.scale = scale;
+                        settings.visorScale = MathHelper.Clamp(d, Settings.MIN_VISOR_SCALE, Settings.MAX_VISOR_SCALE);
                         settings.Save();
-                        MyVisualScriptLogicProvider.SendChatMessage("Scale set to " + scale + "; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
+                        MyVisualScriptLogicProvider.SendChatMessage("Visor scale set to " + settings.visorScale + "; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     }
                     else
                     {
@@ -2430,7 +2496,7 @@ namespace Digi.Helmet
 
                     if(msg.Length == 0)
                     {
-                        MyVisualScriptLogicProvider.SendChatMessage("HUD scale = " + settings.scale, MOD_NAME, 0, MyFontEnum.Blue);
+                        MyVisualScriptLogicProvider.SendChatMessage("HUD scale = " + settings.hudScale, MOD_NAME, 0, MyFontEnum.Blue);
                         return;
                     }
 
@@ -2895,7 +2961,15 @@ namespace Digi.Helmet
                     {
                         var b = Sandbox.Game.Gui.MyHud.BlockInfo;
 
-                        if(!string.IsNullOrEmpty(b.BlockName))
+                        if(buildTool)
+                        {
+                            var casterComp = holdingTool.Components.Get<MyCasterComponent>();
+
+                            if(casterComp != null && casterComp.HitBlock == null)
+                                b = null;
+                        }
+
+                        if(b != null && !string.IsNullOrEmpty(b.BlockName))
                         {
                             int hp = (int)Math.Floor(b.BlockIntegrity * 100);
                             int crit = (int)Math.Floor(b.CriticalIntegrity * 100);
@@ -2960,7 +3034,7 @@ namespace Digi.Helmet
                     {
                         var gun = (IMyHandheldGunObject<MyGunBase>)holdingTool;
                         var gunUser = (IMyGunBaseUser)holdingTool;
-                        var physWepDef = MyDefinitionManager.Static.GetPhysicalItemForHandItem(gunUser.PhysicalItemId) as MyWeaponItemDefinition;
+                        var physWepDef = MyDefinitionManager.Static.TryGetPhysicalItemDefinition(gunUser.PhysicalItemId) as MyWeaponItemDefinition;
                         MyWeaponDefinition wepDef;
 
                         if(physWepDef != null && MyDefinitionManager.Static.TryGetWeaponDefinition(physWepDef.WeaponDefinitionId, out wepDef))
@@ -3008,7 +3082,7 @@ namespace Digi.Helmet
                             }
                             else
                             {
-                                str.AppendLine("ERROR: character has no inventory!");
+                                str.AppendLine("ERROR: no inventory!");
                             }
                         }
                     }
@@ -3569,17 +3643,17 @@ namespace Digi.Helmet
         }
     }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGenerator), true)]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGenerator), useEntityUpdate: false)]
     public class GravityGeneratorFlat : GravityGeneratorLogic { }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGeneratorSphere), true)]
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_GravityGeneratorSphere), useEntityUpdate: false)]
     public class GravityGeneratorSphere : GravityGeneratorLogic { }
 
     public class GravityGeneratorLogic : MyGameLogicComponent
     {
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+            NeedsUpdate = MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
 
         public override void UpdateOnceBeforeFrame()

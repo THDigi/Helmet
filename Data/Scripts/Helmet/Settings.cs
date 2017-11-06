@@ -91,6 +91,7 @@ namespace Digi.Helmet
         public bool glassReflections = true;
         public double animateTime = 0.3;
         public bool autoFovScale = false;
+        public double visorScale = 1.0;
         public double scale = 0.0;
         public double hudScale = 0.0;
         public float warnBlinkTime = 0.25f;
@@ -166,11 +167,14 @@ namespace Digi.Helmet
             { "dot", MyStringId.GetOrCompute("HelmetCrosshairDot") },
         };
 
-        public const double MIN_SCALE = -1.0f;
-        public const double MAX_SCALE = 1.0f;
+        public const double MIN_VISOR_SCALE = 0.2;
+        public const double MAX_VISOR_SCALE = 2.0;
 
-        public const double MIN_HUDSCALE = -1.0f;
-        public const double MAX_HUDSCALE = 1.0f;
+        public const double MIN_SCALE = -1.0;
+        public const double MAX_SCALE = 1.0;
+
+        public const double MIN_HUDSCALE = -1.0;
+        public const double MAX_HUDSCALE = 1.0;
 
         public const float MIN_DELAYED = 0.0f;
         public const float MAX_DELAYED = 1.0f;
@@ -547,6 +551,12 @@ namespace Digi.Helmet
                                 else
                                     Log.Error("Invalid " + args[0] + " value: " + args[1]);
                                 continue;
+                            case "visorscale":
+                                if(double.TryParse(args[1], out d))
+                                    visorScale = MathHelper.Clamp(d, MIN_VISOR_SCALE, MAX_VISOR_SCALE);
+                                else
+                                    Log.Error("Invalid " + args[0] + " value: " + args[1]);
+                                continue;
                             case "scale":
                                 if(double.TryParse(args[1], out d))
                                     scale = Math.Min(Math.Max(d, MIN_SCALE), MAX_SCALE);
@@ -702,7 +712,8 @@ namespace Digi.Helmet
             str.Append("DelayedRotation=").Append(delayedRotation).AppendLine(comments ? " // 0.0 to 1.0, how much to delay the helmet when rotating view where 1 is fully smoothed, 0 disables it, default: 0.5" : "");
             str.Append("AnimateTime=").Append(animateTime).AppendLine(comments ? " // helmet on/off animation time in seconds, 0 to disable animation and instantly show/hide the helmet/HUD, default: 0.3" : "");
             str.Append("AutoFOVScale=").Append(boolToLower(autoFovScale)).AppendLine(comments ? " // if true it automatically sets 'scale' and 'hudscale' when changing FOV in-game, default: false" : "");
-            str.Append("Scale=").Append(scale).AppendLine(comments ? " // the helmet glass scale, -1.0 to 1.0, default is auto-set depending on your FOV when first running." : "");
+            str.Append("VisorScale=").Append(visorScale).AppendLine(comments ? $" // the helmet visor scale percentage, regardless of FOV. Values from {MIN_VISOR_SCALE} to {MAX_VISOR_SCALE}. Default: 1.0" : "");
+            str.Append("Scale=").Append(scale).AppendLine(comments ? " // (NOT USED ANYMORE!) the helmet glass scale, -1.0 to 1.0, default is auto-set depending on your FOV when first running." : "");
             str.Append("HUDScale=").Append(hudScale).AppendLine(comments ? " // the entire HUD scale, -1.0 to 1.0, default is auto-set depending on your FOV when first running." : "");
             str.Append("ToggleHelmetInCockpit=").Append(boolToLower(toggleHelmetInCockpit)).AppendLine(comments ? " // enable toggling helmet inside a cockpit. WARNING: the key monitoring still works while in menus so be aware of that before enabling this. Default: false" : "");
             str.Append("WarnBlinkTime=").Append(warnBlinkTime).AppendLine(comments ? " // the time between each hide/show of the warning icon and its respective bar" : "");
