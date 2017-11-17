@@ -57,7 +57,6 @@ namespace Digi.Helmet
         public IMyCharacter characterEntity = null;
         private MyCharacterDefinition characterDefinition = null;
         private bool characterHasHelmet = true;
-        private bool removedHelmet = false;
         private bool removedHUD = false;
         private bool warningBlinkOn = false;
         private double lastWarningBlink = 0;
@@ -1531,7 +1530,7 @@ namespace Digi.Helmet
                 MyTransparentGeometry.AddBillboardOriented(MATERIAL_VIGNETTE_SIDES, Color.Black, sideP + helmetMatrix.Down * height, helmetMatrix.Left, helmetMatrix.Backward, width, height);
 
                 //helmet.SetWorldMatrix(helmetMatrix);
-                removedHelmet = false;
+                //removedHelmet = false;
             }
 
             // if HUD is disabled or we can't get the info, remove the HUD (if exists) and stop here
@@ -2683,7 +2682,8 @@ namespace Digi.Helmet
                         {
                             var grid = cockpit.CubeGrid as MyCubeGrid;
 
-                            shipMass = grid.GetCurrentMass(null) - (characterDefinition.Mass + charInvMass); // can't supply pilot as MyCharacter, gotta exclude character manually
+                            float baseMass;
+                            grid.GetCurrentMass(out baseMass, out shipMass);
 
                             shipLGs = 0;
                             shipLGsReady = 0;
