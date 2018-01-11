@@ -191,6 +191,7 @@ namespace Digi.Helmet
         private readonly Dictionary<string, int> components = new Dictionary<string, int>();
         private readonly List<IMySlimBlock> blocks = new List<IMySlimBlock>();
         private readonly List<IMyTerminalBlock> terminalBlocks = new List<IMyTerminalBlock>();
+        private readonly List<IMyTerminalBlock> terminalBlocksEmpty = new List<IMyTerminalBlock>(0); // always empty
         private readonly StringBuilder str = new StringBuilder();
         private readonly StringBuilder tmp = new StringBuilder();
 
@@ -257,10 +258,8 @@ namespace Digi.Helmet
                 }
 
                 // TODO feature: lights
-                //var mods = MyAPIGateway.Session.GetCheckpoint("null").Mods; // TODO use Session.Mods
+                //var mods = MyAPIGateway.Session.Mods;
                 //bool found = false;
-                //
-                // TODO just hardcode the folder name to avoid GetCheckpoint()!
                 //
                 //foreach(var mod in mods)
                 //{
@@ -765,7 +764,7 @@ namespace Digi.Helmet
                                         var terminalSystem = MyAPIGateway.TerminalActionsHelper.GetTerminalSystemForGrid(ant.CubeGrid as IMyCubeGrid);
                                         //var yourFaction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(MyAPIGateway.Session.Player.IdentityId);
 
-                                        terminalSystem.GetBlocksOfType<IMyTerminalBlock>(new List<IMyTerminalBlock>(), delegate (IMyTerminalBlock b)
+                                        terminalSystem.GetBlocksOfType<IMyTerminalBlock>(terminalBlocksEmpty, delegate (IMyTerminalBlock b)
                                                                                          {
                                                                                              if(b == ant || !b.HasLocalPlayerAccess())
                                                                                                  return false;
@@ -3394,12 +3393,12 @@ namespace Digi.Helmet
 
                                             if(showHydrogen && def.StoredGasId.SubtypeName == "Hydrogen")
                                             {
-                                                hydrogen += tank.FilledRatio;
+                                                hydrogen += (float)tank.FilledRatio;
                                                 hydrogenTanks += 1;
                                             }
                                             else if(showOxygen && def.StoredGasId.SubtypeName == "Oxygen")
                                             {
-                                                oxygen += tank.FilledRatio;
+                                                oxygen += (float)tank.FilledRatio;
                                                 oxygenTanks += 1;
                                             }
                                         }
