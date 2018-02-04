@@ -3525,19 +3525,19 @@ namespace Digi.Helmet
         }
     }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TextPanel), true, "HelmetHUD_display", "HelmetHUD_displayLow")] // LCD blinking workaround, tied with entity update
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TextPanel), false, "HelmetHUD_display", "HelmetHUD_displayLow")] // LCD blinking workaround, tied with entity update
     public class HelmetLCD : MyGameLogicComponent
     {
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            Entity.NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME;
+            NeedsUpdate = MyEntityUpdateEnum.EACH_FRAME;
         }
 
         public override void UpdateAfterSimulation()
         {
             try
             {
-                var panel = Entity as IMyTextPanel;
+                var panel = (IMyTextPanel)Entity;
 
                 if(Helmet.instance.tick % Helmet.SKIP_TICKS_HUD == 0) // update LCD border color
                 {
@@ -3573,7 +3573,6 @@ namespace Digi.Helmet
                 if(text != null)
                 {
                     panel.WritePublicText(text, false);
-                    panel.ShowTextureOnScreen();
                     panel.ShowPublicTextOnScreen();
                 }
             }
@@ -3584,7 +3583,7 @@ namespace Digi.Helmet
         }
     }
 
-    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TextPanel), true, "HelmetHUD_ghostLCD")] // LCD blinking workaround, tied with entity update
+    [MyEntityComponentDescriptor(typeof(MyObjectBuilder_TextPanel), false, "HelmetHUD_ghostLCD")] // LCD blinking workaround, tied with entity update
     public class GhostLCD : MyGameLogicComponent
     {
         private string prevText = "";
@@ -3592,10 +3591,10 @@ namespace Digi.Helmet
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            Entity.NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME;
+            NeedsUpdate = MyEntityUpdateEnum.EACH_10TH_FRAME;
         }
 
-        public override void UpdateAfterSimulation()
+        public override void UpdateAfterSimulation10()
         {
             try
             {
@@ -3628,9 +3627,8 @@ namespace Digi.Helmet
                     {
                         prevText = text;
 
-                        var lcd = Entity as IMyTextPanel;
+                        var lcd = (IMyTextPanel)Entity;
                         lcd.WritePublicText(text, false);
-                        lcd.ShowTextureOnScreen();
                         lcd.ShowPublicTextOnScreen();
                     }
                 }
