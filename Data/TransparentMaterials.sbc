@@ -15,7 +15,6 @@
       <UseAtlas>false</UseAtlas>
       <NeedSort>false</NeedSort>
       <Emissivity>0</Emissivity>
-      <Reflectivity>0.025</Reflectivity>
       <UVOffset>
         <X>0</X>
         <Y>0</Y>
@@ -36,8 +35,16 @@
         <Z>0</Z>
         <W>0</W>
       </ShadowMultiplier>
-      <Fresnel>1</Fresnel>
       <IsFlareOccluder>false</IsFlareOccluder>
+      <Reflectivity>0.005</Reflectivity>
+      <Fresnel>1</Fresnel>
+      <ReflectionShadow>0.4</ReflectionShadow>
+      <!--
+      <Gloss>0.4</Gloss>
+      <GlossTextureAdd>0.55</GlossTextureAdd>
+      <GlossTexture>Textures\Vignette.dds</GlossTexture>
+      -->
+      <SpecularColorFactor>1</SpecularColorFactor>
     </TransparentMaterial>
 
     <TransparentMaterial>
@@ -150,7 +157,6 @@
       <IgnoreDepth>false</IgnoreDepth>
       <UseAtlas>false</UseAtlas>
       <NeedSort>false</NeedSort>
-      <Emissivity>1.0</Emissivity>
       <Reflectivity>0</Reflectivity>
       <UVOffset>
         <X>0</X>
@@ -166,12 +172,24 @@
         <Z>0.75</Z>
         <W>0.5</W>
       </Color>
+      <LightMultiplier>
+        <X>0.1</X>
+        <Y>0.1</Y>
+        <Z>0.1</Z>
+        <W>0.1</W>
+      </LightMultiplier>
       <ShadowMultiplier>
+        <X>5</X>
+        <Y>5</Y>
+        <Z>5</Z>
+        <W>5</W>
+      </ShadowMultiplier>
+      <AmbientMultiplier>
         <X>0</X>
         <Y>0</Y>
         <Z>0</Z>
         <W>0</W>
-      </ShadowMultiplier>
+      </AmbientMultiplier>
       <Fresnel>0</Fresnel>
       <IsFlareOccluder>true</IsFlareOccluder>
     </TransparentMaterial>
