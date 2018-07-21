@@ -3350,6 +3350,8 @@ namespace Digi.Helmet
                                     int launchers = 0;
                                     float launchersAmmo = 0;
 
+                                    GetBlocksOnce(grid);
+
                                     foreach(var block in terminalBlocks)
                                     {
                                         if(showGatling && block is IMySmallGatlingGun)
@@ -3389,17 +3391,17 @@ namespace Digi.Helmet
                                         else if((showOxygen || showHydrogen) && block is IMyGasTank)
                                         {
                                             var tank = block as IMyGasTank;
-                                            var def = MyDefinitionManager.Static.GetCubeBlockDefinition(tank.BlockDefinition) as MyGasTankDefinition;
+                                            var def = (MyGasTankDefinition)tank.SlimBlock.BlockDefinition;
 
-                                            if(showHydrogen && def.StoredGasId.SubtypeName == "Hydrogen")
+                                            if(showHydrogen && def.StoredGasId == MyResourceDistributorComponent.HydrogenId)
                                             {
                                                 hydrogen += (float)tank.FilledRatio;
-                                                hydrogenTanks += 1;
+                                                hydrogenTanks++;
                                             }
-                                            else if(showOxygen && def.StoredGasId.SubtypeName == "Oxygen")
+                                            else if(showOxygen && def.StoredGasId == MyResourceDistributorComponent.OxygenId)
                                             {
                                                 oxygen += (float)tank.FilledRatio;
-                                                oxygenTanks += 1;
+                                                oxygenTanks++;
                                             }
                                         }
                                     }
