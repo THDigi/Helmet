@@ -36,7 +36,7 @@
         <W>0</W>
       </ShadowMultiplier>
       <IsFlareOccluder>false</IsFlareOccluder>
-      <Reflectivity>0.005</Reflectivity>
+      <Reflectivity>0.015</Reflectivity>
       <Fresnel>1</Fresnel>
       <ReflectionShadow>0.4</ReflectionShadow>
       <!--
