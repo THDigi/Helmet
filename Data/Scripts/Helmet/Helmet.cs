@@ -686,7 +686,6 @@ namespace Digi.Helmet
                                     switch(relation)
                                     {
                                         case MyRelationsBetweenPlayers.Self:
-                                        case MyRelationsBetweenPlayers.Allies:
                                             color = settings.markerColorFaction;
                                             break;
                                         case MyRelationsBetweenPlayers.Enemies:
@@ -3769,7 +3768,7 @@ namespace Digi.Helmet
                 return MyRelationsBetweenPlayers.Enemies;
 
             if(faction1 == faction2)
-                return MyRelationsBetweenPlayers.Allies;
+                return MyRelationsBetweenPlayers.Self;
 
             if(MyAPIGateway.Session.Factions.GetRelationBetweenFactions(faction1.FactionId, faction2.FactionId) == MyRelationsBetweenFactions.Neutral)
                 return MyRelationsBetweenPlayers.Neutral;
