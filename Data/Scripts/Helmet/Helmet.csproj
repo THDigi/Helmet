@@ -100,7 +100,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DevUtils.cs" />
     <Compile Include="Helmet.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="Settings.cs" />
