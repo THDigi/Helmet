@@ -852,9 +852,11 @@ namespace Digi.Helmet
             characterDefinition = null;
             characterHasHelmet = false;
 
-            // charEnt.ToString() returns character's model name
-            if(charEnt != null && MyDefinitionManager.Static.Characters.TryGetValue(charEnt.ToString(), out characterDefinition))
+            if(characterEntity != null)
+            {
+                characterDefinition = (MyCharacterDefinition)characterEntity.Definition;
                 characterHasHelmet = (characterDefinition.SuitResourceStorage != null && characterDefinition.SuitResourceStorage.Count > 0);
+            }
         }
 
         private void RemoveHelmet(bool removeHud = true)
