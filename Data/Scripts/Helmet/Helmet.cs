@@ -3064,7 +3064,7 @@ namespace Digi.Helmet
                                             tmp.Append("[ ] ");
                                     }
 
-                                    float mags = (float)inv.GetItemAmount(wepDef.AmmoMagazinesId[i], MyItemFlags.None);
+                                    float mags = (float)inv.GetItemAmount(magId);
                                     string magName = magDef.DisplayNameText;
 
                                     if(magName.Length > 22)
@@ -3257,7 +3257,7 @@ namespace Digi.Helmet
                                                 var inv = block.GetInventory();
 
                                                 if(inv != null)
-                                                    containerAmmo += (float)inv.GetItemAmount(magDef.Id, MyItemFlags.None) * magDef.Capacity;
+                                                    containerAmmo += (float)inv.GetItemAmount(magDef.Id) * magDef.Capacity;
                                             }
                                         }
 
@@ -3385,8 +3385,8 @@ namespace Digi.Helmet
 
                                             if(inv != null)
                                             {
-                                                mags += (float)inv.GetItemAmount(AMMO_BULLETS.GetId(), MyItemFlags.None);
-                                                missiles += (float)inv.GetItemAmount(AMMO_MISSILES.GetId(), MyItemFlags.None);
+                                                mags += (float)inv.GetItemAmount(AMMO_BULLETS.GetId());
+                                                missiles += (float)inv.GetItemAmount(AMMO_MISSILES.GetId());
                                             }
                                         }
                                         else if((showOxygen || showHydrogen) && block is IMyGasTank)
