@@ -3552,7 +3552,11 @@ namespace Digi.Helmet
                         if(Vector3.DistanceSquared(panelSlim.GetColorMask(), Helmet.instance.settings.displayBorderColor.Value) > 0.01f)
                         {
                             // can't cast to MySlimBlock because of whitelist restrictions so using GetCubeBlock() instead
+#if(VERSION_190 || VERSION_189 || VERSION_188 || VERSION_187 || VERSION_186 || VERSION_185) // HACK backwards compatibility because it's easy in this case
                             panelGrid.ChangeColor(panelGrid.GetCubeBlock(panelSlim.Position), Helmet.instance.settings.displayBorderColor.Value);
+#else
+                            panelGrid.ChangeColorAndSkin(panelGrid.GetCubeBlock(panelSlim.Position), Helmet.instance.settings.displayBorderColor.Value);
+#endif
                             panel.SetEmissiveParts("ScreenArea", Color.White, 1); // fixes the screen being non-emissive
                             Helmet.instance.lastDisplayText = null; // force text rewrite
                         }
@@ -3564,7 +3568,11 @@ namespace Digi.Helmet
                         if(Vector3.DistanceSquared(panelSlim.GetColorMask(), charColor) > 0.01f)
                         {
                             // can't cast to MySlimBlock because of whitelist restrictions so using GetCubeBlock() instead
+#if(VERSION_190 || VERSION_189 || VERSION_188 || VERSION_187 || VERSION_186 || VERSION_185) // HACK backwards compatibility because it's easy in this case
                             panelGrid.ChangeColor(panelGrid.GetCubeBlock(panelSlim.Position), charColor);
+#else
+                            panelGrid.ChangeColorAndSkin(panelGrid.GetCubeBlock(panelSlim.Position), charColor);
+#endif
                             panel.SetEmissiveParts("ScreenArea", Color.White, 1); // fixes the screen being non-emissive
                             Helmet.instance.lastDisplayText = null; // force text rewrite
                         }
