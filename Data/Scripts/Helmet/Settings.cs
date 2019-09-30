@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
+using System.Text;
 using Sandbox.ModAPI;
-using VRageMath;
 using VRage.Utils;
+using VRageMath;
 
 namespace Digi.Helmet
 {
@@ -125,10 +124,11 @@ namespace Digi.Helmet
         public Color markerColorNeutral = Color.White;
         public Color markerColorBlock = Color.Yellow;
         public Vector2 markerPopupOffset = new Vector2(0.045f, -0.01f);
-        public float markerPopupScale = 1f;
+        public float markerPopupFontSize = 1f;
         public Color markerPopupFontColor = new Color(100, 180, 255);
         public Color markerPopupBGColor = Color.Black;
         public Color markerPopupEdgeColor = new Color(0, 55, 200);
+        public float markerPopupScale = 1f;
 
         public int displayUpdateRate = 20;
         public int displayQuality = 1;
@@ -462,6 +462,12 @@ namespace Digi.Helmet
                                     else
                                         Log.Error("Invalid " + args[0] + " value: " + args[1]);
                                     continue;
+                                case "popupfontsize":
+                                    if(float.TryParse(args[1], out f))
+                                        markerPopupFontSize = MathHelper.Clamp(f, 0.001f, 10f);
+                                    else
+                                        Log.Error("Invalid " + args[0] + " value: " + args[1]);
+                                    continue;
                             }
                         }
 
@@ -706,13 +712,13 @@ namespace Digi.Helmet
 
             str.Append("Enabled=").Append(boolToLower(enabled)).AppendLine(comments ? " // toggles the entire mod, default: true" : "");
             str.Append("HUD=").Append(boolToLower(hud)).AppendLine(comments ? " // toggles the HUD, default: true" : "");
-            str.Append("HUDQuality=").Append(hudQuality).AppendLine(comments ? " // controls the quality of certain HUD elements, currently affects the vector indicator. Values: verylow, low, medum, high, ultra, default: high. Ultra is not noticeable comapred to high on 1080p" : "");
+            str.Append("HUDQuality=").Append(hudQuality.ToString()).AppendLine(comments ? " // controls the quality of certain HUD elements, currently affects the vector indicator. Values: verylow, low, medum, high, ultra, default: high. Ultra is not noticeable comapred to high on 1080p" : "");
             str.Append("HUDAlways=").Append(boolToLower(hudAlways)).AppendLine(comments ? " // if set to true, all HUD elements will be shown even if the helmet is off (set to 3) with the exception of disabled elements (the ones set to 0), default: false" : "");
             str.Append("GlassReflections=").Append(boolToLower(glassReflections)).AppendLine(comments ? " // toggles the reflections on the helmet, default: true" : "");
             str.Append("DelayedRotation=").Append(delayedRotation).AppendLine(comments ? " // 0.0 to 1.0, how much to delay the helmet when rotating view where 1 is fully smoothed, 0 disables it, default: 0.5" : "");
             str.Append("AnimateTime=").Append(animateTime).AppendLine(comments ? " // helmet on/off animation time in seconds, 0 to disable animation and instantly show/hide the helmet/HUD, default: 0.3" : "");
             str.Append("AutoFOVScale=").Append(boolToLower(autoFovScale)).AppendLine(comments ? " // if true it automatically sets 'scale' and 'hudscale' when changing FOV in-game, default: false" : "");
-            str.Append("VisorScale=").Append(visorScale).AppendLine(comments ? $" // the helmet visor scale percentage, regardless of FOV. Values from {MIN_VISOR_SCALE} to {MAX_VISOR_SCALE}. Default: 1.0" : "");
+            str.Append("VisorScale=").Append(visorScale).AppendLine(comments ? $" // the helmet visor scale percentage, regardless of FOV. Values from {MIN_VISOR_SCALE.ToString()} to {MAX_VISOR_SCALE.ToString()}. Default: 1.0" : "");
             str.Append("Scale=").Append(scale).AppendLine(comments ? " // (NOT USED ANYMORE!) the helmet glass scale, -1.0 to 1.0, default is auto-set depending on your FOV when first running." : "");
             str.Append("HUDScale=").Append(hudScale).AppendLine(comments ? " // the entire HUD scale, -1.0 to 1.0, default is auto-set depending on your FOV when first running." : "");
             str.Append("ToggleHelmetInCockpit=").Append(boolToLower(toggleHelmetInCockpit)).AppendLine(comments ? " // enable toggling helmet inside a cockpit. WARNING: the key monitoring still works while in menus so be aware of that before enabling this. Default: false" : "");
@@ -749,11 +755,11 @@ namespace Digi.Helmet
 
                 if(!(id == Icons.CROSSHAIR || id == Icons.MARKERS || id == Icons.HORIZON))
                 {
-                    str.Append("  Up=").Append(element.posUp).AppendLine(comments ? " // position from the center towards up, use negative values for down; default: " + defaultElement.posUp : "");
-                    str.Append("  Left=").Append(element.posLeft).AppendLine(comments ? " // position from the center towards left, use negative values for right; default: " + defaultElement.posLeft : "");
+                    str.Append("  Up=").Append(element.posUp).AppendLine(comments ? " // position from the center towards up, use negative values for down; default: " + defaultElement.posUp.ToString() : "");
+                    str.Append("  Left=").Append(element.posLeft).AppendLine(comments ? " // position from the center towards left, use negative values for right; default: " + defaultElement.posLeft.ToString() : "");
                 }
 
-                str.Append("  HudMode=").Append(element.hudMode).AppendLine(comments ? " // shows icon depending on the vanilla HUD's state: 0 = any, 1 = shown when HUD is visible, 2 = shown when HUD is hidden; default: " + defaultElement.hudMode : "");
+                str.Append("  HudMode=").Append(element.hudMode).AppendLine(comments ? " // shows icon depending on the vanilla HUD's state: 0 = any, 1 = shown when HUD is visible, 2 = shown when HUD is hidden; default: " + defaultElement.hudMode.ToString() : "");
 
                 if(id != Icons.HORIZON)
                 {
@@ -778,6 +784,7 @@ namespace Digi.Helmet
                         str.Append("  ColorEnemy=").AppendRGBA(markerColorEnemy).AppendLine(comments ? " // the color of the enemy signals in RGBA format, default: 255, 0, 0, 255" : "");
                         str.Append("  ColorNeutral=").AppendRGBA(markerColorNeutral).AppendLine(comments ? " // the color of the neutral signals in RGBA format, default: 255, 255, 255, 255" : "");
                         str.Append("  ColorBlock=").AppendRGBA(markerColorBlock).AppendLine(comments ? " // the color of block signals in RGBA format, default: 255, 255, 0, 255" : "");
+                        str.Append("  PopupFontSize=").Append(Math.Round(markerPopupFontSize, 5)).AppendLine(comments ? " // marker info popup's font size, default: 1.0" : "");
                         str.Append("  PopupFontColor=").AppendRGB(markerPopupFontColor).AppendLine(comments ? " // marker info popup's font color, default: 100, 180, 255" : "");
                         str.Append("  PopupBGColor=").AppendRGB(markerPopupBGColor).AppendLine(comments ? " // marker info popup's background color, default: 0, 0, 0" : "");
                         str.Append("  PopupEdgeColor=").AppendRGB(markerPopupEdgeColor).AppendLine(comments ? " // marker info popup's background edge color, default: 0, 55, 200" : "");
@@ -800,13 +807,13 @@ namespace Digi.Helmet
                             str.Append("suit");
                         str.AppendLine(comments ? " // LCD frame color in R,G,B format or \"suit\" to use the suit's color, default: suit" : "");
 
-                        str.Append("  SpeedUnit=").Append(displaySpeedUnit).AppendLine(comments ? " // unit displayed for speed, options: " + String.Join(", ", Enum.GetNames(typeof(SpeedUnits))) : "");
+                        str.Append("  SpeedUnit=").Append(displaySpeedUnit.ToString()).AppendLine(comments ? " // unit displayed for speed, options: " + String.Join(", ", Enum.GetNames(typeof(SpeedUnits))) : "");
                     }
 
                     if(defaultElement.warnPercent > -1)
                     {
-                        str.Append("  WarnPercent=").Append(element.warnPercent).AppendLine(comments ? " // warning % for this statistic; default: " + defaultElement.warnPercent : "");
-                        str.Append("  WarnMoveMode=").Append(element.warnMoveMode).AppendLine(comments ? " // warning only shows in a mode: 0 = any, 1 = jetpack off, 2 = jetpack on; default: " + defaultElement.warnMoveMode : "");
+                        str.Append("  WarnPercent=").Append(element.warnPercent).AppendLine(comments ? " // warning % for this statistic; default: " + defaultElement.warnPercent.ToString() : "");
+                        str.Append("  WarnMoveMode=").Append(element.warnMoveMode).AppendLine(comments ? " // warning only shows in a mode: 0 = any, 1 = jetpack off, 2 = jetpack on; default: " + defaultElement.warnMoveMode.ToString() : "");
                     }
                 }
             }

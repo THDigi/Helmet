@@ -1,9 +1,9 @@
 ﻿using System;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.ModAPI;
-using VRage.ObjectBuilders;
 using VRage.Game.Components;
 using VRage.ModAPI;
+using VRage.ObjectBuilders;
 
 namespace Digi.Helmet
 {
@@ -28,7 +28,7 @@ namespace Digi.Helmet
             obj = objectBuilder;
             NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
         }
-        
+
         public override void UpdateOnceBeforeFrame()
         {
             try

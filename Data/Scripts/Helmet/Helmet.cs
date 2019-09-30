@@ -5,27 +5,22 @@ using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
 using Sandbox.Game;
 using Sandbox.Game.Entities;
-using Sandbox.Game.Entities.Character.Components;
 using Sandbox.Game.EntityComponents;
-using Sandbox.Game.Lights;
 using Sandbox.Game.Weapons;
 using Sandbox.ModAPI;
-using Sandbox.ModAPI.Interfaces; // needed for TerminalPropertyExtensions
-using Sandbox.ModAPI.Weapons;
 using SpaceEngineers.Game.ModAPI;
 using VRage;
 using VRage.Game;
 using VRage.Game.Components;
-using VRage.Game.Components.Session;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.Game.ObjectBuilders.Definitions;
-using VRage.Input;
 using VRage.ModAPI;
 using VRage.ObjectBuilders;
 using VRage.Utils;
 using VRageMath;
 
+using BlendTypeEnum = VRageRender.MyBillboard.BlendTypeEnum;
 using IMyControllableEntity = Sandbox.Game.Entities.IMyControllableEntity;
 
 namespace Digi.Helmet
@@ -191,7 +186,7 @@ namespace Digi.Helmet
         private readonly Dictionary<string, int> components = new Dictionary<string, int>();
         private readonly List<IMySlimBlock> blocks = new List<IMySlimBlock>();
         private readonly List<IMyTerminalBlock> terminalBlocks = new List<IMyTerminalBlock>();
-        private readonly List<IMyTerminalBlock> terminalBlocksEmpty = new List<IMyTerminalBlock>(0); // always empty
+        private readonly List<IMyTerminalBlock> tempBlocks = new List<IMyTerminalBlock>();
         private readonly StringBuilder str = new StringBuilder();
         private readonly StringBuilder tmp = new StringBuilder();
 
@@ -256,6 +251,8 @@ namespace Digi.Helmet
                 {
                     hudElementData[id] = new HudElementData();
                 }
+
+                vanillaHUD = !MyAPIGateway.Session.Config.MinimalHud;
 
                 // TODO feature: lights
                 //var mods = MyAPIGateway.Session.Mods;
@@ -763,47 +760,49 @@ namespace Digi.Helmet
                                         var terminalSystem = MyAPIGateway.TerminalActionsHelper.GetTerminalSystemForGrid(ant.CubeGrid as IMyCubeGrid);
                                         //var yourFaction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(MyAPIGateway.Session.Player.IdentityId);
 
-                                        terminalSystem.GetBlocksOfType<IMyTerminalBlock>(terminalBlocksEmpty, delegate (IMyTerminalBlock b)
-                                                                                         {
-                                                                                             if(b == ant || !b.HasLocalPlayerAccess())
-                                                                                                 return false;
+                                        terminalSystem.GetBlocks(tempBlocks);
 
-                                                                                             if(b.ShowOnHUD
-                                                                                                || (b.IsBeingHacked && b.OwnerId != 0)
-                                                                                                || (b is IMyCockpit && (b as MyCockpit).Pilot != null))
-                                                                                             {
-                                                                                                 if(hudEntityMarkers.ContainsKey(b))
-                                                                                                     return false;
+                                        foreach(var b in tempBlocks)
+                                        {
+                                            if(b == ant || !b.HasLocalPlayerAccess())
+                                                continue;
 
-                                                                                                 string n = null;
-                                                                                                 var cockpit = b as MyCockpit;
+                                            if(b.ShowOnHUD
+                                            || (b.IsBeingHacked && b.OwnerId != 0)
+                                            || (b is IMyCockpit && (b as MyCockpit).Pilot != null))
+                                            {
+                                                if(hudEntityMarkers.ContainsKey(b))
+                                                    continue;
 
-                                                                                                 if(cockpit != null && cockpit.Pilot != null)
-                                                                                                 {
-                                                                                                     var pilot = (IMyCharacter)cockpit.Pilot;
+                                                string n = null;
+                                                var cockpit = b as MyCockpit;
 
-                                                                                                     if(pilot.ControllerInfo != null)
-                                                                                                     {
-                                                                                                         var faction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(pilot.ControllerInfo.ControllingIdentityId);
+                                                if(cockpit != null && cockpit.Pilot != null)
+                                                {
+                                                    var pilot = (IMyCharacter)cockpit.Pilot;
 
-                                                                                                         // TODO relation color?
-                                                                                                         //MyAPIGateway.Session.Factions.GetRelationBetweenFactions(faction.FactionId, 
+                                                    if(pilot.ControllerInfo != null)
+                                                    {
+                                                        var faction = MyAPIGateway.Session.Factions.TryGetPlayerFaction(pilot.ControllerInfo.ControllingIdentityId);
 
-                                                                                                         if(faction != null)
-                                                                                                             n = faction.Tag + ". " + pilot.DisplayName;
-                                                                                                     }
+                                                        // TODO relation color?
+                                                        //MyAPIGateway.Session.Factions.GetRelationBetweenFactions(faction.FactionId, 
 
-                                                                                                     if(n == null)
-                                                                                                         n = pilot.DisplayName;
-                                                                                                 }
-                                                                                                 else
-                                                                                                     n = b.CustomName;
+                                                        if(faction != null)
+                                                            n = faction.Tag + ". " + pilot.DisplayName;
+                                                    }
 
-                                                                                                 hudEntityMarkers.Add(b, new HelmetHudMarker(n, settings.markerColorBlock, size / 2));
-                                                                                             }
+                                                    if(n == null)
+                                                        n = pilot.DisplayName;
+                                                }
+                                                else
+                                                    n = b.CustomName;
 
-                                                                                             return false;
-                                                                                         });
+                                                hudEntityMarkers.Add(b, new HelmetHudMarker(n, settings.markerColorBlock, size / 2));
+                                            }
+                                        }
+
+                                        tempBlocks.Clear();
                                     }
                                 }
 
@@ -818,15 +817,7 @@ namespace Digi.Helmet
                     if(tick % SKIP_TICKS_PLANETS == 0)
                     {
                         planets.Clear();
-                        MyAPIGateway.Entities.GetEntities(ents, delegate (IMyEntity e)
-                                                          {
-                                                              var p = e as MyPlanet;
-
-                                                              if(p != null)
-                                                                  planets.Add(p);
-
-                                                              return false; // no reason to add to the list
-                                                          });
+                        MyAPIGateway.Entities.GetEntities(ents, FindPlanets);
                     }
 
                     if(tick % SKIP_TICKS_GRAVITY == 0)
@@ -844,6 +835,16 @@ namespace Digi.Helmet
             }
 
             return HelmetLogicReturn.OK;
+        }
+
+        private bool FindPlanets(IMyEntity ent)
+        {
+            var p = ent as MyPlanet;
+
+            if(p != null)
+                planets.Add(p);
+
+            return false; // no reason to add to the list
         }
 
         private void UpdateCharacterReference(IMyCharacter charEnt)
@@ -1905,7 +1906,7 @@ namespace Digi.Helmet
                         PrefabTextPanel.SubtypeName = "HelmetHUD_ghostLCD";
                         PrefabTextPanel.FontColor = settings.markerPopupFontColor;
                         PrefabTextPanel.BackgroundColor = settings.markerPopupBGColor;
-                        PrefabTextPanel.FontSize = 2;
+                        PrefabTextPanel.FontSize = settings.markerPopupFontSize;
 
                         PrefabBuilder.CubeBlocks.Add(PrefabTextPanel);
                         PrefabBuilder.CubeBlocks.Add(PrefabBattery);
@@ -2336,8 +2337,7 @@ namespace Digi.Helmet
             ShareMode = MyOwnershipShareModeEnum.None,
             DeformationRatio = 0,
             ShowOnHUD = false,
-            //ShowText = ShowTextOnScreenFlag.PUBLIC, // HACK not whitelisted anymore...
-            FontSize = DISPLAY_FONT_SIZE,
+            ContentType = VRage.Game.GUI.TextPanel.ContentType.TEXT_AND_IMAGE,
         };
         private static MyObjectBuilder_BatteryBlock PrefabBattery = new MyObjectBuilder_BatteryBlock()
         {
@@ -2448,7 +2448,7 @@ namespace Digi.Helmet
                     if(msg.Length == 0)
                     {
                         fov = MathHelper.ToDegrees(MyAPIGateway.Session.Config.FieldOfView);
-                        MyVisualScriptLogicProvider.SendChatMessage("Your FOV is: " + fov, MOD_NAME, 0, MyFontEnum.Blue);
+                        MyVisualScriptLogicProvider.SendChatMessage($"Your FOV is: {fov.ToString()}", MOD_NAME, 0, MyFontEnum.Blue);
                     }
                     else if(!float.TryParse(msg, out fov))
                     {
@@ -2459,7 +2459,7 @@ namespace Digi.Helmet
                     {
                         settings.ScaleForFOV(fov);
                         settings.Save();
-                        MyVisualScriptLogicProvider.SendChatMessage("HUD and helmet scale set to " + settings.scale + "; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
+                        MyVisualScriptLogicProvider.SendChatMessage($"HUD and helmet scale set to {settings.scale.ToString()}; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     }
 
                     return;
@@ -2470,7 +2470,7 @@ namespace Digi.Helmet
 
                     if(msg.Length == 0)
                     {
-                        MyVisualScriptLogicProvider.SendChatMessage("Visor scale = " + settings.visorScale, MOD_NAME, 0, MyFontEnum.Blue);
+                        MyVisualScriptLogicProvider.SendChatMessage($"Visor scale = {settings.visorScale.ToString()}", MOD_NAME, 0, MyFontEnum.Blue);
                         return;
                     }
 
@@ -2480,7 +2480,7 @@ namespace Digi.Helmet
                     {
                         settings.visorScale = MathHelper.Clamp(d, Settings.MIN_VISOR_SCALE, Settings.MAX_VISOR_SCALE);
                         settings.Save();
-                        MyVisualScriptLogicProvider.SendChatMessage("Visor scale set to " + settings.visorScale + "; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
+                        MyVisualScriptLogicProvider.SendChatMessage($"Visor scale set to {settings.visorScale.ToString()}; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     }
                     else
                     {
@@ -2495,7 +2495,7 @@ namespace Digi.Helmet
 
                     if(msg.Length == 0)
                     {
-                        MyVisualScriptLogicProvider.SendChatMessage("HUD scale = " + settings.hudScale, MOD_NAME, 0, MyFontEnum.Blue);
+                        MyVisualScriptLogicProvider.SendChatMessage($"HUD scale = {settings.hudScale.ToString()}", MOD_NAME, 0, MyFontEnum.Blue);
                         return;
                     }
 
@@ -2506,11 +2506,11 @@ namespace Digi.Helmet
                         scale = Math.Min(Math.Max(scale, Settings.MIN_HUDSCALE), Settings.MAX_HUDSCALE);
                         settings.hudScale = scale;
                         settings.Save();
-                        MyVisualScriptLogicProvider.SendChatMessage("HUD scale set to " + scale + "; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
+                        MyVisualScriptLogicProvider.SendChatMessage($"HUD scale set to {scale.ToString()}; saved to config.", MOD_NAME, 0, MyFontEnum.Green);
                     }
                     else
                     {
-                        MyVisualScriptLogicProvider.SendChatMessage("Invalid float number: " + msg, MOD_NAME, 0, MyFontEnum.Red);
+                        MyVisualScriptLogicProvider.SendChatMessage($"Invalid float number: {msg}", MOD_NAME, 0, MyFontEnum.Red);
                     }
 
                     return;
@@ -3144,7 +3144,7 @@ namespace Digi.Helmet
 
                                                 if(slimBlock == null)
                                                 {
-                                                    Log.Error("Unexpected empty block slot at " + blockPos.Value);
+                                                    Log.Error("Unexpected empty block slot at " + blockPos.Value.ToString());
                                                     return null;
                                                 }
 
@@ -3496,18 +3496,18 @@ namespace Digi.Helmet
             // FIXME whitelist screwed this up
             /*
             str.Append("Ore clusters in range:").AppendLine();
-            
+
             var ores = new Dictionary<byte, int>(); // finish & optimize
-            
+
             foreach(var ore in MyHud.OreMarkers)
             {
                 if(ore.VoxelMap == null || ore.VoxelMap.Closed)
                     continue;
-                
+
                 foreach(var data in ore.Materials)
                 {
                     var index = data.Material.Index;
-                    
+
                     if(ores.ContainsKey(index))
                     {
                         ores[index]++;
@@ -3518,7 +3518,7 @@ namespace Digi.Helmet
                     }
                 }
             }
-            
+
             foreach(var kv in ores)
             {
                 var voxelDef = MyDefinitionManager.Static.GetVoxelMaterialDefinition(kv.Key);
@@ -3583,8 +3583,7 @@ namespace Digi.Helmet
 
                 if(text != null)
                 {
-                    panel.WritePublicText(text, false);
-                    panel.ShowPublicTextOnScreen();
+                    panel.WriteText(text, false);
                 }
             }
             catch(Exception e)
@@ -3639,8 +3638,7 @@ namespace Digi.Helmet
                         prevText = text;
 
                         var lcd = (IMyTextPanel)Entity;
-                        lcd.WritePublicText(text, false);
-                        lcd.ShowPublicTextOnScreen();
+                        lcd.WriteText(text, false);
                     }
                 }
             }
@@ -3789,7 +3787,7 @@ namespace Digi.Helmet
         // HACK temporary workaround to my matrix being weirdly aligned
         public static void TempAddBillboardOriented(MyStringId material, Vector4 color, Vector3D origin, MatrixD matrix, float radius)
         {
-            MyTransparentGeometry.AddBillboardOriented(material, color, origin, matrix.Left, matrix.Down, radius);
+            MyTransparentGeometry.AddBillboardOriented(material, color, origin, matrix.Left, matrix.Down, radius, radius, Vector2.Zero, blendType: BlendTypeEnum.SDR);
         }
     }
 
