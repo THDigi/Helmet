@@ -15,20 +15,6 @@
       <UseAtlas>false</UseAtlas>
       <NeedSort>false</NeedSort>
       <Emissivity>0</Emissivity>
-      <UVOffset>
-        <X>0</X>
-        <Y>0</Y>
-      </UVOffset>
-      <UVSize>
-        <X>1</X>
-        <Y>1</Y>
-      </UVSize>
-      <Color>
-        <X>1.0</X>
-        <Y>1.0</Y>
-        <Z>1.0</Z>
-        <W>0</W>
-      </Color>
       <ShadowMultiplier>
         <X>0</X>
         <Y>0</Y>
@@ -61,20 +47,6 @@
       <NeedSort>false</NeedSort>
       <Emissivity>0</Emissivity>
       <Reflectivity>0.000000001</Reflectivity>
-      <UVOffset>
-        <X>0</X>
-        <Y>0</Y>
-      </UVOffset>
-      <UVSize>
-        <X>1</X>
-        <Y>1</Y>
-      </UVSize>
-      <Color>
-        <X>1.0</X>
-        <Y>1.0</Y>
-        <Z>1.0</Z>
-        <W>0</W>
-      </Color>
       <ShadowMultiplier>
         <X>0</X>
         <Y>0</Y>
@@ -99,20 +71,6 @@
       <NeedSort>false</NeedSort>
       <Emissivity>0</Emissivity>
       <Reflectivity>0.000000001</Reflectivity>
-      <UVOffset>
-        <X>0</X>
-        <Y>0</Y>
-      </UVOffset>
-      <UVSize>
-        <X>1</X>
-        <Y>1</Y>
-      </UVSize>
-      <Color>
-        <X>1.0</X>
-        <Y>1.0</Y>
-        <Z>1.0</Z>
-        <W>0</W>
-      </Color>
       <ShadowMultiplier>
         <X>0</X>
         <Y>0</Y>
