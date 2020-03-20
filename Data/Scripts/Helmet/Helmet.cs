@@ -1911,6 +1911,8 @@ namespace Digi.Helmet
                         PrefabBuilder.CubeBlocks.Add(PrefabTextPanel);
                         PrefabBuilder.CubeBlocks.Add(PrefabBattery);
 
+                        PrefabBuilder.Name = "HelmetMod_GhostLCDGrid";
+
                         MyAPIGateway.Entities.RemapObjectBuilder(PrefabBuilder);
                         var ent = MyAPIGateway.Entities.CreateFromObjectBuilder(PrefabBuilder) as MyEntity;
                         ent.IsPreview = true; // don't sync on MP
@@ -2279,6 +2281,8 @@ namespace Digi.Helmet
                     PrefabCubeBlock.SubtypeName = name;
                     PrefabBuilder.CubeBlocks.Add(PrefabCubeBlock);
                 }
+
+                PrefabBuilder.Name = "HelmetMod_" + name;
 
                 MyAPIGateway.Entities.RemapObjectBuilder(PrefabBuilder);
                 var ent = (MyEntity)MyAPIGateway.Entities.CreateFromObjectBuilder(PrefabBuilder);
