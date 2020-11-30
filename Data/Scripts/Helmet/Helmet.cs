@@ -1600,63 +1600,63 @@ namespace Digi.Helmet
                 case Icons.THRUSTERS:
                 case Icons.LIGHTS:
                 case Icons.WARNING:
+                {
+                    if(!show)
                     {
-                        if(!show)
-                        {
-                            if(id == Icons.WARNING)
-                                warningBlinkOn = false; // reset the blink status for the warning icon
-
-                            return;
-                        }
-
-                        // place the element on its position
-                        matrix.Translation += (matrix.Left * elementSettings.posLeft) + (matrix.Up * elementSettings.posUp);
-
-                        // align the element to the view and give it the glass curve
-                        TransformHUD(ref matrix, matrix.Translation + matrix.Forward * 0.05, headPos, -matrix.Up, matrix.Forward);
-
-                        const float alpha = 0.5f;
-
-                        switch(id)
-                        {
-                            case Icons.DAMPENERS:
-                            case Icons.BROADCASTING:
-                            case Icons.THRUSTERS:
-                            case Icons.LIGHTS:
-                                var color = (elementData.value > 0 ? settings.statusIconOnColor : settings.statusIconOffColor);
-                                long fadeTime = TimeSpan.TicksPerMillisecond * 1000;
-
-                                if(elementData.lastChangedTime > 0)
-                                {
-                                    var diff = (DateTime.UtcNow.Ticks - elementData.lastChangedTime);
-
-                                    if(diff < fadeTime)
-                                    {
-                                        float fadePercent = (float)diff / (float)fadeTime;
-                                        color = Color.Lerp((elementData.value > 0 ? settings.statusIconSetOnColor : settings.statusIconSetOffColor), color, (fadePercent * fadePercent));
-                                    }
-                                    else
-                                        elementData.lastChangedTime = 0;
-                                }
-
-                                color *= alpha;
-                                Extensions.TempAddBillboardOriented(settings.defaultElements[id].material, color, matrix.Translation, matrix, 0.0025f);
-                                break;
-                            case Icons.WARNING:
-                                if(show)
-                                {
-                                    if(warningBlinkOn)
-                                        Extensions.TempAddBillboardOriented(settings.defaultElements[id].material, Color.White * alpha, matrix.Translation, matrix, 0.0075f);
-                                }
-                                else
-                                {
-                                    warningBlinkOn = false; // reset the blink status for the warning icon
-                                }
-                                break;
-                        }
+                        if(id == Icons.WARNING)
+                            warningBlinkOn = false; // reset the blink status for the warning icon
 
                         return;
                     }
+
+                    // place the element on its position
+                    matrix.Translation += (matrix.Left * elementSettings.posLeft) + (matrix.Up * elementSettings.posUp);
+
+                    // align the element to the view and give it the glass curve
+                    TransformHUD(ref matrix, matrix.Translation + matrix.Forward * 0.05, headPos, -matrix.Up, matrix.Forward);
+
+                    const float alpha = 0.5f;
+
+                    switch(id)
+                    {
+                        case Icons.DAMPENERS:
+                        case Icons.BROADCASTING:
+                        case Icons.THRUSTERS:
+                        case Icons.LIGHTS:
+                            var color = (elementData.value > 0 ? settings.statusIconOnColor : settings.statusIconOffColor);
+                            long fadeTime = TimeSpan.TicksPerMillisecond * 1000;
+
+                            if(elementData.lastChangedTime > 0)
+                            {
+                                var diff = (DateTime.UtcNow.Ticks - elementData.lastChangedTime);
+
+                                if(diff < fadeTime)
+                                {
+                                    float fadePercent = (float)diff / (float)fadeTime;
+                                    color = Color.Lerp((elementData.value > 0 ? settings.statusIconSetOnColor : settings.statusIconSetOffColor), color, (fadePercent * fadePercent));
+                                }
+                                else
+                                    elementData.lastChangedTime = 0;
+                            }
+
+                            color *= alpha;
+                            Extensions.TempAddBillboardOriented(settings.defaultElements[id].material, color, matrix.Translation, matrix, 0.0025f);
+                            break;
+                        case Icons.WARNING:
+                            if(show)
+                            {
+                                if(warningBlinkOn)
+                                    Extensions.TempAddBillboardOriented(settings.defaultElements[id].material, Color.White * alpha, matrix.Translation, matrix, 0.0075f);
+                            }
+                            else
+                            {
+                                warningBlinkOn = false; // reset the blink status for the warning icon
+                            }
+                            break;
+                    }
+
+                    return;
+                }
             }
 
             // if the element should be hidden instead of shown, this executes then entire method ends
