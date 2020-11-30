@@ -3548,7 +3548,7 @@ namespace Digi.Helmet
 
             var vertices = instance.Vertices;
             vertices.Clear();
-            MyMeshHelper.GenerateSphere(ref worldMatrix, radius, wireDivideRatio, vertices);
+            GenerateSphere(ref worldMatrix, radius, wireDivideRatio, vertices);
             Vector3D center = worldMatrix.Translation;
             MyQuadD quad;
 
@@ -3638,7 +3638,7 @@ namespace Digi.Helmet
             MatrixD sphereMatrix = MatrixD.CreateRotationX(-MathHelperD.PiOver2);
             sphereMatrix.Translation = new Vector3D(0.0, halfHeight, 0.0);
             sphereMatrix *= worldMatrix;
-            MyMeshHelper.GenerateSphere(ref sphereMatrix, radius, wireDivideRatio, vertices);
+            GenerateSphere(ref sphereMatrix, radius, wireDivideRatio, vertices);
 
             int halfVerts = vertices.Count / 2;
             var addVec = worldMatrix.Down * height;
@@ -3717,6 +3717,63 @@ namespace Digi.Helmet
                 }
             }
             #endregion
+        }
+
+        private List<Vector3D> VectorBuffer = new List<Vector3D>(5000);
+
+        // the main problem with crashing, the vector buffer is not threadsafe nor ThreadStatic.
+        public static void GenerateSphere(ref MatrixD worldMatrix, float radius, int steps, List<Vector3D> vertices)
+        {
+            var tmpVectorBuffer = instance.VectorBuffer;
+            tmpVectorBuffer.Clear();
+
+            int num = 0;
+            float num2 = 360 / steps; // no idea what these represent, just leaving them as they are from the decompiled SE source...
+            float num3 = 90f - num2;
+            float num4 = 360f - num2;
+            Vector3D item = default(Vector3D);
+
+            for(float num5 = 0f; num5 <= num3; num5 += num2)
+            {
+                for(float num6 = 0f; num6 <= num4; num6 += num2)
+                {
+                    item.X = (radius * Math.Sin(MathHelper.ToRadians(num6)) * Math.Sin(MathHelper.ToRadians(num5)));
+                    item.Y = (radius * Math.Cos(MathHelper.ToRadians(num6)) * Math.Sin(MathHelper.ToRadians(num5)));
+                    item.Z = (radius * Math.Cos(MathHelper.ToRadians(num5)));
+                    tmpVectorBuffer.Add(item);
+                    num++;
+                    item.X = (radius * Math.Sin(MathHelper.ToRadians(num6)) * Math.Sin(MathHelper.ToRadians(num5 + num2)));
+                    item.Y = (radius * Math.Cos(MathHelper.ToRadians(num6)) * Math.Sin(MathHelper.ToRadians(num5 + num2)));
+                    item.Z = (radius * Math.Cos(MathHelper.ToRadians(num5 + num2)));
+                    tmpVectorBuffer.Add(item);
+                    num++;
+                    item.X = (radius * Math.Sin(MathHelper.ToRadians(num6 + num2)) * Math.Sin(MathHelper.ToRadians(num5)));
+                    item.Y = (radius * Math.Cos(MathHelper.ToRadians(num6 + num2)) * Math.Sin(MathHelper.ToRadians(num5)));
+                    item.Z = (radius * Math.Cos(MathHelper.ToRadians(num5)));
+                    tmpVectorBuffer.Add(item);
+                    num++;
+                    item.X = (radius * Math.Sin(MathHelper.ToRadians(num6 + num2)) * Math.Sin(MathHelper.ToRadians(num5 + num2)));
+                    item.Y = (radius * Math.Cos(MathHelper.ToRadians(num6 + num2)) * Math.Sin(MathHelper.ToRadians(num5 + num2)));
+                    item.Z = (radius * Math.Cos(MathHelper.ToRadians(num5 + num2)));
+                    tmpVectorBuffer.Add(item);
+                    num++;
+                }
+            }
+
+            foreach(Vector3D item3 in tmpVectorBuffer)
+            {
+                vertices.Add(item3);
+            }
+
+            foreach(Vector3D item4 in tmpVectorBuffer)
+            {
+                vertices.Add(new Vector3D(item4.X, item4.Y, 0.0 - item4.Z));
+            }
+
+            for(int i = 0; i < vertices.Count; i++)
+            {
+                vertices[i] = Vector3D.Transform(vertices[i], worldMatrix);
+            }
         }
         #endregion
     }
